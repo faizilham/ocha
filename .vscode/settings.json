@@ -1,0 +1,8 @@
+{
+    "search.exclude": {
+        "tmp": true,
+        "target": true
+    },
+
+    "editor.wordWrap": "on"
+}

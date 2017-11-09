@@ -1,0 +1,69 @@
+# A very rough grammar design
+
+# lexer grammar
+LOGICAL_OP : 'and', 'or';
+BINARY_OP : '==', '>=', '>', '<', '<=', "!=", '+', '-', '*', '/'
+UNARY_OP : '!', '-';
+IDENTIFIER : [_a-zA-Z][_a-zA-Z0-9]*;
+NUMBER : [0-9]+('.'[0-9]+)?
+STRING : '"' ([^"])* '"'
+NIL : 'nil'
+
+# parsing grammar
+
+program : stmt*;
+
+# statements
+
+stmt :
+    block |
+    if |
+    while |
+    var_decl | 
+    func_decl |
+    assignment |
+    expr_stmt ;
+
+block : '{' stmt* '}';
+
+if : 'if' '(' expr ')' stmt ( else stmt )? ;
+
+while : while '(' expr ')' stmt ;
+
+var_decl : 'let' IDENTIFIER ('=' expr)? ';' ;
+
+func_decl : 'fn' IDENTIFIER '(' param? ')' block;
+
+param : IDENTIFIER (',' IDENTIFIER)*;
+
+assignment : (IDENTIFIER | member) '=' expr ';' ;
+member : expr ('.' IDENTIFIER | '[' expr ']')+ ;
+
+expr_stmt : expr ';'
+
+# expressions
+expr : conditional |
+    logical |
+    binary |
+    unary |
+    call |
+    primary;
+
+conditional : expr '?' expr ':' expr;
+logical : expr LOGICAL_OP expr;
+binary : expr BINARY_OP expr;
+unary : UNARY_OP expr;
+
+call : expr ( '(' args? ')' | '.' IDENTIFIER | '[' expr ']')* ;
+args : expr (',' expr)*;
+
+primary : NUMBER | STRING | NIL | list | object | lambda | group;
+
+list : '[' args? ']';
+
+object : '{' properties? '}';
+properties : property (',' property)* ','?;
+property : field | method;
+
+field : ( IDENTIFIER | STRING ) ':' expr;
+method : IDENTIFER '(' param? ')' block;

@@ -1,0 +1,6 @@
+[package]
+name = "ocha"
+version = "0.1.0"
+authors = ["Faiz Ilham <faizilham.faizz@gmail.com>"]
+
+[dependencies]
