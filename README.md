@@ -1,7 +1,7 @@
 Ocha
 ====
 
-A toy programming language interpreter in Rust. I make this for exploring Rust, compiler & interpreter in general, and ultimately for fun.
+A toy programming language interpreter in Rust. I make this for exploring Rust, compiler & interpreter in general, and ultimately for fun. Some of the syntaxes and features are inspired by Javascript and Rust.
 
 Planned Features
 -----
