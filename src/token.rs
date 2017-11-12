@@ -29,15 +29,15 @@ pub enum TokenType {
 }
 
 #[derive(Debug)]
-pub struct Token<'a> {
+pub struct Token {
     token_type: TokenType,
-    lexeme: &'a str,
+    lexeme: String,
     literal: Value,
     line: i32    
 }
 
-impl<'a> Token<'a> {
-    pub fn new (token_type: TokenType, lexeme: &'a str, literal: Value, line: i32) -> Token<'a> {
+impl Token {
+    pub fn new (token_type: TokenType, lexeme: String, literal: Value, line: i32) -> Token {
         Token {token_type, lexeme, literal, line}
     }
 }
@@ -54,8 +54,8 @@ pub enum Value {
 const EPSILON : f64 = 1E-9;
 
 impl Value {
-    pub fn to_string(value : &Value) -> String {
-        match *value {
+    pub fn to_string(&self) -> String {
+        match *self {
             Value::Int(ref i) => format!("{}", i),
             Value::Float(ref f) => format!("{}", f),
             Value::Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
@@ -64,8 +64,8 @@ impl Value {
         }
     }
 
-    pub fn is_truthy(value : &Value) -> bool {
-        match *value {
+    pub fn to_bool(&self) -> bool {
+        match *self {
             Value::Int(ref i) => *i != 0,
             Value::Float(ref f) => (*f).abs() < EPSILON,
             Value::Bool(ref b) => *b,

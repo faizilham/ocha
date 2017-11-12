@@ -4,6 +4,7 @@ use std::error::Error;
 
 mod error;
 mod token;
+mod lexer;
 
 use error::throw_error;
 
