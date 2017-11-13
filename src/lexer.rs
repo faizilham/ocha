@@ -104,8 +104,6 @@ fn string(lexer : &mut LexerState) -> Result<Token, String>{
         };        
     }
 
-    println!("{}", lexer.previous());
-
     if lexer.previous() != '"' {
         return Err(format!("Expect '\"' after string"));
     }
