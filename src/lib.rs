@@ -5,6 +5,8 @@ use std::error::Error;
 mod error;
 mod token;
 mod lexer;
+mod expr;
+mod parser;
 
 use error::throw_error;
 
@@ -16,10 +18,10 @@ pub fn run_file(filename : String) -> Result<(), String> {
 
     let tokens = lexer::scan(contents)?;
 
-    for token in tokens {
-        println!("{:?}", token);
-    }
-    
+    let expr = parser::parse(tokens)?;
+
+    println!("{:?}", expr);
+
     Ok(())
 }
 

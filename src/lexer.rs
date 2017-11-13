@@ -210,7 +210,7 @@ impl<'a> LexerState<'a> {
     }
 
     fn advance(&mut self) -> char {
-        self.current += 1;
+        if !self.at_end() { self.current += 1; }
         self.previous()
     }
 
