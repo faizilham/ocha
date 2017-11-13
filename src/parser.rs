@@ -1,6 +1,15 @@
 use token::{TokenType, Token};
+use token::TokenType::*;
 use expr::Expr;
 use error::error_message;
+
+// use EOF as padding
+static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
+    [BANG_EQUAL, EQUAL_EQUAL, EOF, EOF],
+    [GREATER, GREATER_EQUAL, LESS, LESS_EQUAL],
+    [MINUS, PLUS, EOF, EOF],
+    [SLASH, STAR, EOF, EOF]
+];
 
 pub fn parse(tokens: Vec<Token>) -> Result<Box<Expr>, String> {
     let mut parser = ParserState::new(tokens);
@@ -13,12 +22,12 @@ fn expression(parser: &mut ParserState) -> Result<Box<Expr>, String>{
 }
 
 fn ternary(parser: &mut ParserState) -> Result<Box<Expr>, String> {
-    let mut expr = binary(parser)?;
+    let mut expr = binary(parser, 0)?;
 
-    if let Some(_) = parser.matches(TokenType::QUESTION) {
-        let true_branch = binary(parser)?;
-        parser.expect(TokenType::COLON, "Expect ':' after true branch expression")?;
-        let false_branch = binary(parser)?;
+    if let Some(_) = parser.matches(QUESTION) {
+        let true_branch = binary(parser, 0)?;
+        parser.expect(COLON, "Expect ':' after true branch expression")?;
+        let false_branch = binary(parser, 0)?;
 
         expr = Box::new(Expr::Ternary{condition: expr, true_branch, false_branch});
     }
@@ -26,27 +35,47 @@ fn ternary(parser: &mut ParserState) -> Result<Box<Expr>, String> {
     Ok(expr)
 }
 
-fn binary(parser: &mut ParserState) -> Result<Box<Expr>, String>{
-    let mut expr = primary(parser)?;
-    while let Some(operator) = parser.matches(TokenType::PLUS) {
-        let right = primary(parser)?;
+fn binary(parser: &mut ParserState, precedence: usize) -> Result<Box<Expr>, String>{
+    if precedence >= BINARY_PRECEDENCE.len() {
+        return unary(parser);
+    }
 
+    let mut expr = binary(parser, precedence + 1)?;
+
+    while let Some(operator) = parser.match_all(&BINARY_PRECEDENCE[precedence]) {
+        let right = binary(parser, precedence + 1)?;
         expr = Box::new(Expr::Binary{left: expr, right, operator: operator});
     }
 
     Ok(expr)
 }
 
+fn unary(parser: &mut ParserState) -> Result<Box<Expr>, String>{
+    if let Some(operator) = parser.match_all(&[BANG, MINUS]) {
+        let expr = primary(parser)?;
+        Ok(Box::new(Expr::Unary{operator, expr}))
+    } else {
+        primary(parser)
+    }
+}
+
 fn primary(parser: &mut ParserState) -> Result<Box<Expr>, String>{
     let token = parser.advance().unwrap();
     let expr = match token.token_type {
-        TokenType::NUMBER | TokenType::NIL | TokenType::TRUE | TokenType::FALSE | TokenType::STRING =>
-            Box::new(Expr::Literal { value: token.literal } ),
-        
+        NUMBER | NIL | TRUE | FALSE | STRING => Expr::Literal { value: token.literal },
+        IDENTIFIER => Expr::Variable{name: token},
+        LEFT_PAREN => return grouping(parser),
         _ => return Err(error_message(parser.last_line, "Expect expression"))
     };
 
-    Ok(expr)
+    Ok(Box::new(expr))
+}
+
+fn grouping(parser: &mut ParserState) -> Result<Box<Expr>, String> {
+    let expr = expression(parser)?;
+    parser.expect(RIGHT_PAREN, "Expect ')'")?;
+
+    Ok(Box::new(Expr::Grouping{expr}))
 }
 
 struct ParserState {
@@ -101,9 +130,11 @@ impl ParserState {
         }
     }
 
-    fn match_all(&mut self, token_types: Vec<TokenType>) -> Option<Token> {
+    fn match_all(&mut self, token_types: &[TokenType]) -> Option<Token> {
         for token_type in token_types {
-            if (self.peek_eq(token_type)){
+            if *token_type == EOF {
+                break;
+            } else if self.peek_eq(*token_type){
                 return self.advance();
             }
         }
