@@ -1,123 +1,150 @@
 use token::{Token, Value, TokenType};
 use token::TokenType::*;
 
+pub fn scan(source_string : String) -> Vec<Token> {
+    let source = source_string.chars().collect();
+    let mut tokens = Vec::new();
+    let mut lexer = LexerState::new(&source);
 
-pub struct Lexer {
-    source: Vec<char>
+    while !lexer.at_end() {
+        lexer.start = lexer.current;
+        scan_token(&mut lexer, &mut tokens);
+    }
+
+    tokens
 }
 
-struct LexerState {
+fn scan_token(lexer : &mut LexerState, tokens : &mut Vec<Token>) -> Result<(), String>{
+    let c = lexer.advance();
+
+    let token = match c {
+        // delimiters
+        ';' =>  lexer.create_token(SEMICOLON),
+        ',' =>  lexer.create_token(COMMA),
+        '.' =>  lexer.create_token(DOT),
+
+        // parentheses
+        '(' =>  lexer.create_token(LEFT_PAREN),
+        ')' =>  lexer.create_token(RIGHT_PAREN),
+        '{' =>  lexer.create_token(LEFT_BRACE),
+        '}' =>  lexer.create_token(RIGHT_BRACE),
+        '[' =>  lexer.create_token(LEFT_SQUARE),
+        ']' =>  lexer.create_token(RIGHT_SQUARE),
+
+        // logics & arithmatics 
+        '!' =>  if lexer.matches('=') { lexer.create_token(BANG_EQUAL) }
+                else { lexer.create_token(BANG) },
+        '=' =>  if lexer.matches('=') { lexer.create_token(EQUAL_EQUAL) }
+                else { lexer.create_token(EQUAL) },
+        '>' =>  if lexer.matches('=') { lexer.create_token(GREATER_EQUAL) }
+                else { lexer.create_token(GREATER) },
+        '<' =>  if lexer.matches('=') { lexer.create_token(LESS_EQUAL) }
+                else { lexer.create_token(LESS) },
+
+        '?' =>  lexer.create_token(QUESTION),
+        ':' =>  lexer.create_token(COLON),
+
+        '+' =>  lexer.create_token(PLUS),
+        '-' =>  lexer.create_token(MINUS),
+        '*' =>  lexer.create_token(STAR),
+
+        '/' =>  if lexer.matches('/') {
+                    while !lexer.matches('\n') { // comments
+                        lexer.advance();
+                    };
+                    return Ok(());
+                } else {
+                    lexer.create_token(SLASH)
+                },
+
+        '"' =>  string(lexer),
+        _ => return Err(format!("Unknown token {}", c)),
+    }?;
+
+    tokens.push(token);
+    
+    Ok(())
+}
+
+fn string(lexer : &mut LexerState) -> Result<Token, String>{
+    while !lexer.at_end() && lexer.peek() != '"' {
+        lexer.advance();
+    }
+
+    lexer.expect('"')?;
+
+    let value = lexer.get_lexeme(lexer.start + 1, lexer.current - 1);
+    lexer.create_literal(STRING, Value::Str(value))
+}
+
+struct LexerState<'a> {
     start: usize,
     current: usize,
-    line: i32
+    line: i32,
+    source: &'a Vec<char>
 }
 
-impl Lexer {
-    pub fn new (source_string : String) -> Lexer {
-        let source = source_string.chars().collect();
-
-        Lexer{source}
+impl<'a> LexerState<'a> {
+    fn new (source : &'a Vec<char>) -> LexerState<'a>{
+        return LexerState { start: 0, current: 0, line: 1, source};
     }
 
-    pub fn scan(&mut self) -> Vec<Token>{
-        let mut tokens = Vec::new();
-        let mut state = LexerState {start: 0, current: 0, line: 1};
-
-        while !self.at_end(&state){
-            let (token, next_state) = self.scan_token(state);
-            state = next_state;
-            if let Some(token) = token {
-                tokens.push(token);
-            }
-        }
-
-        tokens
+    fn advance(&mut self) -> char {
+        self.current += 1;
+        self.previous()
     }
 
-    fn scan_token(&self, mut state : LexerState) -> (Option<Token>, LexerState){
-        state.start = state.current;        
-        let c = self.advance(&mut state);
-
-        let token = match *c {
-            // delimiters
-            ';' => self.create_token(&state, SEMICOLON),
-            ',' => self.create_token(&state, COMMA),
-
-            // parentheses
-            '(' => self.create_token(&state, LEFT_PAREN),
-            ')' => self.create_token(&state, RIGHT_PAREN),
-            '{' => self.create_token(&state, LEFT_BRACE),
-            '}' => self.create_token(&state, RIGHT_BRACE),
-            '[' => self.create_token(&state, LEFT_SQUARE),
-            ']' => self.create_token(&state, RIGHT_SQUARE),
-
-            // logics & arithmatics 
-            '!' => self.create_token(&state, if self.peek_eq(&state, '=') { BANG_EQUAL } else { BANG }),
-            '=' => self.create_token(&state, if self.peek_eq(&state, '=') { EQUAL_EQUAL } else { EQUAL }),
-            '>' => self.create_token(&state, if self.peek_eq(&state, '=') { GREATER_EQUAL } else { GREATER }),
-            '<' => self.create_token(&state, if self.peek_eq(&state, '=') { LESS_EQUAL } else { LESS }),
-            '+' => self.create_token(&state, PLUS),
-            '-' => self.create_token(&state, MINUS),
-            '*' => self.create_token(&state, STAR),
-            '/' =>  if self.peek_eq(&state, '/') {
-                        while !self.peek_eq(&state, '=') { // comments
-                            self.advance(&mut state);
-                        };
-
-                        return (None, state);
-                    } else {
-                        self.create_token(&state, SLASH)
-                    },
-
-            _ => self.create_token(&state, NIL), // to be deleted
-        };
-
-        (Some(token), state)
-    }
-
-    fn advance(&self, state: &mut LexerState) -> &char{
-        state.current += 1;
-        self.source.get(state.current - 1).unwrap()
-    }
-
-    fn peek(&self, state: &LexerState) -> Option<&char> {
-        if self.at_end(state) {
-            None
-        } else {
-            Some(self.source.get(state.current).unwrap())
-        }
-    }
-
-    fn peek_eq(&self, state: &LexerState, expected: char) -> bool {
-        match self.peek(state) {
-            Some(x) => *x == expected,
-            None => false
-        }
-    }
-
-    fn at_end(&self, state: &LexerState) -> bool {
-        state.current >= self.source.len()
-    }
-
-    fn matches(&self, state: &mut LexerState, expected: char) -> bool {
-        if self.peek_eq(state, expected) {
-            state.current += 1;
+    fn matches(&mut self, expected : char) -> bool {
+        if (self.peek_eq(expected)){
+            self.current += 1;
             true
         } else {
             false
         }
     }
 
-    fn create_token(&self, state: &LexerState, token_type: TokenType) -> Token {
-        let lexeme = self.get_lexeme(state.start, state.current);
-        
-        Token::new(token_type, lexeme, Value::Nil, state.line)
+    fn expect(&mut self, expected : char) -> Result<(), String>{
+        if (self.matches(expected)){
+            Ok(())
+        } else {
+            Err(format!("Expected token {}", expected))
+        }
     }
 
-    fn create_literal(&self, state: &LexerState, token_type: TokenType, literal: Value) -> Token {
-        let lexeme = self.get_lexeme(state.start, state.current);
+    fn at_end(&self) -> bool{
+        self.current >= self.source.len()
+    }
 
-        Token::new(token_type, lexeme, literal, state.line)
+    fn peek(&self) -> char {
+        if let Some(c) = self.source.get(self.current) {
+            *c
+        } else {
+            '\0'
+        }
+    }
+
+    fn peek_eq(&self, expected : char) -> bool {
+        self.peek() == expected
+    }
+
+    fn previous(&self) -> char {
+        if let Some(c) = self.source.get(self.current - 1) {
+            *c
+        } else {
+            '\0'
+        }
+    }
+
+    fn create_token(&self, token_type: TokenType) -> Result<Token, String> {
+        let lexeme = self.get_lexeme(self.start, self.current);
+        
+        Ok(Token::new(token_type, lexeme, Value::Nil, self.line))
+    }
+
+    fn create_literal(&self, token_type: TokenType, literal: Value) -> Result<Token, String> {
+        let lexeme = self.get_lexeme(self.start, self.current);
+
+        Ok(Token::new(token_type, lexeme, literal, self.line))
     }
 
     fn get_lexeme(&self, start: usize, end: usize) -> String {

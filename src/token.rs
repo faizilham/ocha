@@ -2,7 +2,7 @@
 #[derive(Debug)]
 pub enum TokenType {
     // Delimiters
-    SEMICOLON, COMMA, 
+    SEMICOLON, COMMA, DOT,
 
     // Parentheses
     LEFT_PAREN, RIGHT_PAREN, LEFT_BRACE, RIGHT_BRACE,
