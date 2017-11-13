@@ -14,7 +14,11 @@ pub fn run_file(filename : String) -> Result<(), String> {
         _ => return throw_error(format!("File '{}' not found", filename))
     };
 
-    println!("{}", contents);
+    let tokens = lexer::scan(contents)?;
+
+    for token in tokens {
+        println!("{:?}", token);
+    }
     
     Ok(())
 }

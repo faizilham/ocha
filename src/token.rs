@@ -30,10 +30,10 @@ pub enum TokenType {
 
 #[derive(Debug)]
 pub struct Token {
-    token_type: TokenType,
-    lexeme: String,
-    literal: Value,
-    line: i32    
+    pub token_type: TokenType,
+    pub lexeme: String,
+    pub literal: Value,
+    pub line: i32    
 }
 
 impl Token {
@@ -41,6 +41,8 @@ impl Token {
         Token {token_type, lexeme, literal, line}
     }
 }
+
+use std::f64::EPSILON;
 
 #[derive(Debug)]
 pub enum Value {
@@ -50,8 +52,6 @@ pub enum Value {
     Str(String),
     Nil
 }
-
-const EPSILON : f64 = 1E-9;
 
 impl Value {
     pub fn to_string(&self) -> String {
