@@ -1,7 +1,7 @@
 use token::{TokenType, Token};
 use token::TokenType::*;
 use expr::Expr;
-use error::error_message;
+use error::{error_message, print_error};
 
 // use EOF as padding
 static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
@@ -14,7 +14,14 @@ static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
 pub fn parse(tokens: Vec<Token>) -> Result<Box<Expr>, String> {
     let mut parser = ParserState::new(tokens);
 
-    expression(&mut parser)
+    let result = expression(&mut parser);
+
+    if let Err(message) = result {
+        print_error(&message);
+        Err(message)
+    } else {
+        result
+    }
 }
 
 fn expression(parser: &mut ParserState) -> Result<Box<Expr>, String>{
