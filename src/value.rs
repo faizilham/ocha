@@ -13,12 +13,12 @@ use self::Value::*;
 
 impl Value {
     pub fn copy(&self) -> Value {
-        match *self {
-            Value::Int(ref i) => Value::Int(*i),
-            Value::Float(ref f) => Value::Float(*f),
-            Value::Bool(ref b) => Value::Bool(*b),
-            Value::Str(ref s) => Value::Str(s.clone()),
-            Value::Nil => Value::Nil
+        match self {
+            &Int(ref i) => Int(*i),
+            &Float(ref f) => Float(*f),
+            &Bool(ref b) => Bool(*b),
+            &Str(ref s) => Str(s.clone()),
+            &Nil => Nil
         }
     }
 
@@ -47,22 +47,22 @@ impl Value {
     }
 
     pub fn to_bool(&self) -> bool {
-        match *self {
-            Value::Int(ref i) => *i != 0,
-            Value::Float(ref f) => (*f).abs() < EPSILON,
-            Value::Bool(ref b) => *b,
-            Value::Str(ref s) => s.len() > 0,
-            Value::Nil => false
+        match self {
+            &Int(ref i) => *i != 0,
+            &Float(ref f) => (*f).abs() < EPSILON,
+            &Bool(ref b) => *b,
+            &Str(ref s) => s.len() > 0,
+            &Nil => false
         }
     }
 
     pub fn to_string(&self) -> String {
-        match *self {
-            Value::Int(ref i) => format!("{}", i),
-            Value::Float(ref f) => format!("{}", f),
-            Value::Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
-            Value::Str(ref s) => s.clone(),
-            Value::Nil => String::from("nil")
+        match self {
+            &Int(ref i) => format!("{}", i),
+            &Float(ref f) => format!("{}", f),
+            &Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
+            &Str(ref s) => s.clone(),
+            &Nil => String::from("nil")
         }
     }
 }
