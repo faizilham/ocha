@@ -1,5 +1,6 @@
 use expr::{ExprVisitor, Expr};
-use token::{Token, Value};
+use token::Token;
+use value::Value;
 
 pub struct AstPrinter {}
 

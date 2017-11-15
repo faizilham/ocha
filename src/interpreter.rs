@@ -1,7 +1,8 @@
 use expr::{ExprVisitor, Expr};
-use token::{Token, Value};
+use token::Token;
 use token::TokenType::*;
-use token::Value::*;
+use value::Value;
+use value::Value::*;
 
 use error::{error_message, print_error};
 
@@ -40,7 +41,7 @@ impl ExprVisitor<Result<Value, String>> for Interpreter {
             LESS            => Bool( left_val.ordering(&right_val)? < 0 ),
             LESS_EQUAL      => Bool( left_val.ordering(&right_val)? <= 0 ),
             
-            STAR           => match (left_val, right_val) {
+            STAR            => match (left_val, right_val) {
                                 (Int(ref a), Int(ref b))        => Int(a * b),
                                 (Float(ref a), Float(ref b))    => Float(a * b),
                                 (Int(ref a), Float(ref b))      => Float((*a as f64) * b),
@@ -68,7 +69,7 @@ impl ExprVisitor<Result<Value, String>> for Interpreter {
                                 (_, _) => return err(operator.line, "Invalid type for operator /")
                             },
 
-            PLUS           => match (left_val, right_val) {
+            PLUS            => match (left_val, right_val) {
                                 (Int(ref a), Int(ref b))        => Int(a + b),
                                 (Float(ref a), Float(ref b))    => Float(a - b),
                                 (Int(ref a), Float(ref b))      => Float((*a as f64) + b),

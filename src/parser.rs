@@ -1,7 +1,7 @@
+use error::{error_message, print_error};
+use expr::Expr;
 use token::{TokenType, Token};
 use token::TokenType::*;
-use expr::Expr;
-use error::{error_message, print_error};
 
 // use EOF as padding
 static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [

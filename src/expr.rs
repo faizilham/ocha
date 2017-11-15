@@ -1,4 +1,5 @@
-use token::{Token, Value};
+use token::Token;
+use value::Value;
 
 #[derive(Debug)]
 pub enum Expr {

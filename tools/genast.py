@@ -62,7 +62,8 @@ def define_ast(basename, type_data):
     with open(output_dir + "/" + basename.lower() + ".rs", "w") as writer:
         extend_writer(writer)
 
-        writer.writeln("use token::{Token, Value};")
+        writer.writeln("use token::Token;")
+        writer.writeln("use value::Value;")
         writer.writeln()
 
         types = parse_types(type_data)

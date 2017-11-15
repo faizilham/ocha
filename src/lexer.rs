@@ -1,5 +1,6 @@
-use token::{Token, Value, TokenType};
+use token::{Token, TokenType};
 use token::TokenType::*;
+use value::Value;
 
 use error::report_error;
 

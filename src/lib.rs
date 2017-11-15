@@ -1,16 +1,16 @@
-use std::fs::File;
-use std::io::prelude::*;
-use std::error::Error;
-
-mod error;
-mod token;
-mod lexer;
-mod expr;
-mod parser;
 mod astprinter;
+mod error;
+mod expr;
 mod interpreter;
+mod lexer;
+mod parser;
+mod token;
+mod value;
 
 use error::throw_error;
+use std::error::Error;
+use std::fs::File;
+use std::io::prelude::*;
 
 pub fn run_file(filename : String) -> Result<(), String> {
     let contents = match read_file(&filename) {
