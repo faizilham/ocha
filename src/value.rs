@@ -12,26 +12,6 @@ pub enum Value {
 use self::Value::*;
 
 impl Value {
-    pub fn to_string(&self) -> String {
-        match *self {
-            Value::Int(ref i) => format!("{}", i),
-            Value::Float(ref f) => format!("{}", f),
-            Value::Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
-            Value::Str(ref s) => s.clone(),
-            Value::Nil => String::from("nil")
-        }
-    }
-
-    pub fn to_bool(&self) -> bool {
-        match *self {
-            Value::Int(ref i) => *i != 0,
-            Value::Float(ref f) => (*f).abs() < EPSILON,
-            Value::Bool(ref b) => *b,
-            Value::Str(ref s) => s.len() > 0,
-            Value::Nil => false
-        }
-    }
-
     pub fn copy(&self) -> Value {
         match *self {
             Value::Int(ref i) => Value::Int(*i),
@@ -64,5 +44,25 @@ impl Value {
         };
 
         Ok(order)
+    }
+
+    pub fn to_bool(&self) -> bool {
+        match *self {
+            Value::Int(ref i) => *i != 0,
+            Value::Float(ref f) => (*f).abs() < EPSILON,
+            Value::Bool(ref b) => *b,
+            Value::Str(ref s) => s.len() > 0,
+            Value::Nil => false
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match *self {
+            Value::Int(ref i) => format!("{}", i),
+            Value::Float(ref f) => format!("{}", f),
+            Value::Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
+            Value::Str(ref s) => s.clone(),
+            Value::Nil => String::from("nil")
+        }
     }
 }
