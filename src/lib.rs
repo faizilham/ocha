@@ -8,6 +8,7 @@ mod lexer;
 mod expr;
 mod parser;
 mod astprinter;
+mod interpreter;
 
 use error::throw_error;
 
@@ -21,10 +22,14 @@ pub fn run_file(filename : String) -> Result<(), String> {
 
     let expr = parser::parse(tokens)?;
 
-    let mut printer = astprinter::AstPrinter{};
-    let result = printer.evaluate(&expr);
+    let mut inter = interpreter::Interpreter::new();
 
-    println!("{}", result);
+    inter.interpret(&expr);
+
+    // let mut printer = astprinter::AstPrinter{};
+    // let result = printer.evaluate(&expr);
+
+    // println!("{}", result);
 
     Ok(())
 }

@@ -9,7 +9,7 @@ impl AstPrinter {
     }
 }
 
-impl ExprVisitor<String>  for AstPrinter{
+impl ExprVisitor<String> for AstPrinter{
     fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> String {
         let leftval = self.evaluate(left);
         let rightval = self.evaluate(right);
