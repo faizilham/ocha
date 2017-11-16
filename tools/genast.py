@@ -17,6 +17,7 @@ AST = {
     "Stmt":(
         [ "ast::expr::Expr" ],
         [
+            "Block      -> body: Vec<Box<Stmt>>",
             "Expression -> expr: Box<Expr>",
             "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>",
@@ -124,5 +125,7 @@ for (basename, (imports, types)) in AST.items():
     define_ast(basename, imports, types)
 
 with open(output_dir + "/mod.rs", "w") as writer:
-    for basename in AST:
-        writer.write("pub mod {};\n".format(basename.lower()))
+    modules = sorted([basename.lower() for basename in AST])
+
+    for module in modules:
+        writer.write("pub mod {};\n".format(module))

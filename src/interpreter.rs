@@ -44,6 +44,14 @@ impl Interpreter {
 }
 
 impl StmtVisitor<Result<(), String>> for Interpreter {
+    fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> Result<(), String>{
+        for statement in body {
+            self.execute(statement)?;
+        }
+        Ok(())
+    }
+
+
     fn visit_expression(&mut self, expr: &Box<Expr>) -> Result<(), String>{
         self.evaluate(expr)?;
         Ok(())

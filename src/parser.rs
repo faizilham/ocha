@@ -43,7 +43,9 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, String> {
 // statement parsing
 
 fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
-    if parser.matches(PRINT) {
+    if parser.matches(LEFT_BRACE) {
+        block_statement(parser)
+    } else if parser.matches(PRINT) {
         print_statement(parser)
     } else if parser.matches(IF) {
         if_statement(parser)
@@ -52,6 +54,18 @@ fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
     } else {
         expr_statement(parser)
     }
+}
+
+fn block_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+    let mut body : Vec<Box<Stmt>> = Vec::new();
+
+    while !parser.at_end() && !parser.peek_eq(RIGHT_BRACE) {
+        body.push(statement(parser)?);
+    }
+
+    parser.expect(RIGHT_BRACE, "Expect '}' at the end of block")?;
+
+    Ok(Box::new(Stmt::Block { body }))
 }
 
 fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
