@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use token::Token;
 use value::Value;
 
@@ -5,7 +6,7 @@ use value::Value;
 pub enum Expr {
     Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
     Grouping { expr: Box<Expr> },
-    Literal { value: Value },
+    Literal { value: Rc<Value> },
     Unary { operator: Token, expr: Box<Expr> },
     Ternary { condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr> },
     Variable { name: Token },
@@ -14,7 +15,7 @@ pub enum Expr {
 pub trait ExprVisitor<T> {
     fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> T;
     fn visit_grouping(&mut self, expr: &Box<Expr>) -> T;
-    fn visit_literal(&mut self, value: &Value) -> T;
+    fn visit_literal(&mut self, value: &Rc<Value>) -> T;
     fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> T;
     fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> T;
     fn visit_variable(&mut self, name: &Token) -> T;

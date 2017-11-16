@@ -1,5 +1,6 @@
-use error::{error_message, print_error};
+use std::rc::Rc;
 use ast::expr::Expr;
+use error::{error_message, print_error};
 use token::{TokenType, Token};
 use token::TokenType::*;
 
@@ -69,7 +70,7 @@ fn unary(parser: &mut ParserState) -> Result<Box<Expr>, String>{
 fn primary(parser: &mut ParserState) -> Result<Box<Expr>, String>{
     let token = parser.advance().unwrap();
     let expr = match token.token_type {
-        NUMBER | NIL | TRUE | FALSE | STRING => Expr::Literal { value: token.literal },
+        NUMBER | NIL | TRUE | FALSE | STRING => Expr::Literal { value: Rc::new(token.literal) },
         IDENTIFIER => Expr::Variable{name: token},
         LEFT_PAREN => return grouping(parser),
         _ => return Err(error_message(parser.last_line, "Expect expression"))

@@ -12,16 +12,6 @@ pub enum Value {
 use self::Value::*;
 
 impl Value {
-    pub fn copy(&self) -> Value {
-        match self {
-            &Int(ref i) => Int(*i),
-            &Float(ref f) => Float(*f),
-            &Bool(ref b) => Bool(*b),
-            &Str(ref s) => Str(s.clone()),
-            &Nil => Nil
-        }
-    }
-
     pub fn ordering (&self, other: &Value) -> Result<i32, &'static str> {
         let order = match (self, other) {
             (&Int(ref a), &Int(ref b)) => if a > b { 1 } else if a < b { -1 } else { 0 },
@@ -65,6 +55,18 @@ impl PartialEq for Value {
             (&Str(ref a), &Str(ref b)) => a == b,
             (&Nil, &Nil) => true,
             (_, _) => false
+        }
+    }
+}
+
+impl Clone for Value {
+    fn clone(&self) -> Value {
+        match self {
+            &Int(ref i) => Int(*i),
+            &Float(ref f) => Float(*f),
+            &Bool(ref b) => Bool(*b),
+            &Str(ref s) => Str(s.clone()),
+            &Nil => Nil
         }
     }
 }

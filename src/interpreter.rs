@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use ast::expr::{ExprVisitor, Expr};
 use token::Token;
 use token::TokenType::*;
@@ -22,15 +24,15 @@ impl Interpreter {
         };
     }
 
-    fn evaluate(&mut self, expr: &Box<Expr>) -> Result<Value, String> {
+    fn evaluate(&mut self, expr: &Box<Expr>) -> Result<Rc<Value>, String> {
         Expr::accept(expr, self)
     }
 }
 
-impl ExprVisitor<Result<Value, String>> for Interpreter {
-    fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> Result<Value, String> {
-        let left_val = self.evaluate(left)?;
-        let right_val = self.evaluate(right)?;
+impl ExprVisitor<Result<Rc<Value>, String>> for Interpreter {
+    fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> Result<Rc<Value>, String> {
+        let left_val = &*self.evaluate(left)?;
+        let right_val = &*self.evaluate(right)?;
 
         let value = match operator.token_type {
             // equality
@@ -42,40 +44,40 @@ impl ExprVisitor<Result<Value, String>> for Interpreter {
             LESS_EQUAL      => Bool( left_val.ordering(&right_val)? <= 0 ),
             
             STAR            => match (left_val, right_val) {
-                                (Int(ref a), Int(ref b))        => Int(a * b),
-                                (Float(ref a), Float(ref b))    => Float(a * b),
-                                (Int(ref a), Float(ref b))      => Float((*a as f64) * b),
-                                (Float(ref a), Int(ref b))      => Float(a * (*b as f64)),
+                                (&Int(ref a), &Int(ref b))        => Int(a * b),
+                                (&Float(ref a), &Float(ref b))    => Float(a * b),
+                                (&Int(ref a), &Float(ref b))      => Float((*a as f64) * b),
+                                (&Float(ref a), &Int(ref b))      => Float(a * (*b as f64)),
 
                                 (_, _) => return err(operator.line, "Invalid type for operator *")
                             },
 
             MINUS           => match (left_val, right_val) {
-                                (Int(ref a), Int(ref b))        => Int(a - b),
-                                (Float(ref a), Float(ref b))    => Float(a - b),
-                                (Int(ref a), Float(ref b))      => Float((*a as f64) - b),
-                                (Float(ref a), Int(ref b))      => Float(a - (*b as f64)),
+                                (&Int(ref a), &Int(ref b))        => Int(a - b),
+                                (&Float(ref a), &Float(ref b))    => Float(a - b),
+                                (&Int(ref a), &Float(ref b))      => Float((*a as f64) - b),
+                                (&Float(ref a), &Int(ref b))      => Float(a - (*b as f64)),
 
                                 (_, _) => return err(operator.line, "Invalid type for operator -")
                             },
 
             SLASH           => match (left_val, right_val) {
-                                (Float(ref a), Float(ref b))    => Float(a / b),
-                                (Int(ref a), Float(ref b))      => Float((*a as f64) / b),
-                                (Float(ref a), Int(ref b))      => Float(a / (*b as f64)),
-                                (Int(_), Int(0))                => return err(operator.line, "Division by zero"),
-                                (Int(ref a), Int(ref b))        => Int(a / b),
+                                (&Float(ref a), &Float(ref b))    => Float(a / b),
+                                (&Int(ref a), &Float(ref b))      => Float((*a as f64) / b),
+                                (&Float(ref a), &Int(ref b))      => Float(a / (*b as f64)),
+                                (&Int(_), &Int(0))                => return err(operator.line, "Division by zero"),
+                                (&Int(ref a), &Int(ref b))        => Int(a / b),
                                 
                                 (_, _) => return err(operator.line, "Invalid type for operator /")
                             },
 
             PLUS            => match (left_val, right_val) {
-                                (Int(ref a), Int(ref b))        => Int(a + b),
-                                (Float(ref a), Float(ref b))    => Float(a - b),
-                                (Int(ref a), Float(ref b))      => Float((*a as f64) + b),
-                                (Float(ref a), Int(ref b))      => Float(a + (*b as f64)),
-                                (Str(ref a), ref b)             => Str( format!("{}{}", a, b.to_string()) ),
-                                (ref a, Str(ref b))             => Str( format!("{}{}", a.to_string(), b) ),
+                                (&Int(ref a), &Int(ref b))        => Int(a + b),
+                                (&Float(ref a), &Float(ref b))    => Float(a - b),
+                                (&Int(ref a), &Float(ref b))      => Float((*a as f64) + b),
+                                (&Float(ref a), &Int(ref b))      => Float(a + (*b as f64)),
+                                (&Str(ref a), ref b)              => Str( format!("{}{}", a, b.to_string()) ),
+                                (ref a, &Str(ref b))              => Str( format!("{}{}", a.to_string(), b) ),
 
                                 (_, _) => return err(operator.line, "Invalid type for operator +")
                             },
@@ -83,36 +85,36 @@ impl ExprVisitor<Result<Value, String>> for Interpreter {
             _ => return err(operator.line, "Operator error")
         };
 
-        Ok(value)
+        Ok(Rc::new(value))
     }
 
-    fn visit_grouping(&mut self, expr: &Box<Expr>) -> Result<Value, String> {
+    fn visit_grouping(&mut self, expr: &Box<Expr>) -> Result<Rc<Value>, String> {
         self.evaluate(expr)
     }
 
-    fn visit_literal(&mut self, value: &Value) -> Result<Value, String> {
+    fn visit_literal(&mut self, value: &Rc<Value>) -> Result<Rc<Value>, String> {
         // optimize this so it doesn't need copying
-        Ok(value.copy())
+        Ok(value.clone())
     }
 
-    fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> Result<Value, String> {
-        let value = self.evaluate(expr)?;
+    fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> Result<Rc<Value>, String> {
+        let value = &*self.evaluate(expr)?;
 
         let value = match operator.token_type {
             BANG    => Bool(!value.to_bool()),
             MINUS   => match value {
-                        Int(value) => Value::Int(-value),
-                        Float(value) => Value::Float(-value),
+                        &Int(value) => Value::Int(-value),
+                        &Float(value) => Value::Float(-value),
                         _ => return err(operator.line, "Invalid value type for operator -")
                     },
             _       => return err(operator.line, "Operator error")
         };
 
-        Ok(value)
+        Ok(Rc::new(value))
     }
 
-    fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> Result<Value, String> {
-        let cond_value = self.evaluate(condition)?;
+    fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> Result<Rc<Value>, String> {
+        let cond_value = &*self.evaluate(condition)?;
 
         if cond_value.to_bool() {
             self.evaluate(true_branch)
@@ -121,11 +123,11 @@ impl ExprVisitor<Result<Value, String>> for Interpreter {
         }
     }
 
-    fn visit_variable(&mut self, name: &Token) -> Result<Value, String> {
+    fn visit_variable(&mut self, name: &Token) -> Result<Rc<Value>, String> {
         err(name.line, "not yet implemented")
     }
 }
 
-fn err(line : i32, message : &str) -> Result<Value, String> {
+fn err(line : i32, message : &str) -> Result<Rc<Value>, String> {
     Err(error_message(line, message))
 }

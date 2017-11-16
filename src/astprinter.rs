@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use ast::expr::{ExprVisitor, Expr};
 use token::Token;
 use value::Value;
@@ -22,7 +24,7 @@ impl ExprVisitor<String> for AstPrinter{
         format!("(group {})", value)
     }
 
-    fn visit_literal(&mut self, value: &Value) -> String {
+    fn visit_literal(&mut self, value: &Rc<Value>) -> String {
         value.to_string()
     }
 

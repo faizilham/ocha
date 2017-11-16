@@ -3,11 +3,11 @@ output_dir = "src/ast"
 
 AST = {
     "Expr": (
-        [ "token::Token", "value::Value"],
+        [ "std::rc::Rc", "token::Token", "value::Value"],
         [
             "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
             "Grouping   -> expr: Box<Expr>",
-            "Literal    -> value: Value",
+            "Literal    -> value: Rc<Value>",
             "Unary      -> operator: Token, expr: Box<Expr>",
             "Ternary    -> condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr>",
             "Variable   -> name: Token"
