@@ -18,6 +18,7 @@ AST = {
         [ "ast::expr::Expr" ],
         [
             "Expression -> expr: Box<Expr>",
+            "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>"
         ]
     )

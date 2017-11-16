@@ -21,7 +21,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, String> {
 
     let mut has_error = false;
 
-    while let None = parser.matches(EOF) {
+    while !parser.matches(EOF) {
         let stmt = statement(&mut parser);
         match stmt {
             Ok(stmt) => statements.push(stmt),
@@ -43,8 +43,10 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, String> {
 // statement parsing
 
 fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
-    if let Some(_) = parser.matches(PRINT) {
+    if parser.matches(PRINT) {
         print_statement(parser)
+    } else if parser.matches(IF) {
+        if_statement(parser)
     } else {
         expr_statement(parser)
     }
@@ -58,6 +60,22 @@ fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
     Ok(Box::new(Stmt::Expression { expr }))
 }
 
+fn if_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+    parser.expect(LEFT_PAREN, "Expect '(' after 'if'")?;
+    let condition = expression(parser)?;
+    parser.expect(RIGHT_PAREN, "Expect ')' after condition")?;
+
+    let true_branch = statement(parser)?;
+    
+    let false_branch = if parser.matches(ELSE) {
+        Some(statement(parser)?)
+    } else {
+        None
+    };
+
+    Ok(Box::new(Stmt::If { condition, true_branch, false_branch }))
+}
+
 fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
     parser.expect(LEFT_PAREN, "Expect '(' after 'print'")?;
 
@@ -68,7 +86,7 @@ fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
 
         exprs.push(expr);
 
-        if let None = parser.matches(COMMA) {
+        if !parser.matches(COMMA) {
             break;
         }
     }
@@ -88,7 +106,7 @@ fn expression(parser: &mut ParserState) -> Result<Box<Expr>, String>{
 fn ternary(parser: &mut ParserState) -> Result<Box<Expr>, String> {
     let mut expr = binary(parser, 0)?;
 
-    if let Some(_) = parser.matches(QUESTION) {
+    if parser.matches(QUESTION) {
         let true_branch = binary(parser, 0)?;
         parser.expect(COLON, "Expect ':' after true branch expression")?;
         let false_branch = binary(parser, 0)?;
@@ -179,7 +197,7 @@ impl ParserState {
         }
     }
 
-    fn matches(&mut self, token_type: TokenType) -> Option<Token>{
+    fn get_matches(&mut self, token_type: TokenType) -> Option<Token> {
         if self.peek_eq(token_type) {
             self.advance()
         } else {
@@ -187,8 +205,16 @@ impl ParserState {
         }
     }
 
+    fn matches(&mut self, token_type: TokenType) -> bool {
+        if let Some(_) = self.get_matches(token_type) {
+            true
+        } else {
+            false
+        }
+    }
+
     fn expect(&mut self, token_type: TokenType, message: &str) -> Result<Token, String>{
-        match self.matches(token_type) {
+        match self.get_matches(token_type) {
             Some(token) => Ok(token),
             None => Err(error_message(self.last_line, message))
         }

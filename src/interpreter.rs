@@ -49,6 +49,18 @@ impl StmtVisitor<Result<(), String>> for Interpreter {
         Ok(())
     }
 
+    fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> Result<(), String>{
+        let cond_value = self.evaluate(condition)?;
+
+        if cond_value.to_bool() {
+            self.execute(true_branch)?;
+        } else if let &Some(ref else_branch) = false_branch {
+            self.execute(else_branch)?;
+        }
+
+        Ok(())
+    }
+
     fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> Result<(), String>{
         let mut values : Vec<Rc<Value>> = Vec::new();
 
