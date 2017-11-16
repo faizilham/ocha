@@ -1,5 +1,7 @@
 use std::rc::Rc;
 use ast::expr::Expr;
+use ast::stmt::Stmt;
+
 use error::{error_message, print_error};
 use token::{TokenType, Token};
 use token::TokenType::*;
@@ -12,18 +14,72 @@ static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
     [SLASH, STAR, EOF, EOF]
 ];
 
-pub fn parse(tokens: Vec<Token>) -> Result<Box<Expr>, String> {
+pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, String> {
     let mut parser = ParserState::new(tokens);
 
-    let result = expression(&mut parser);
+    let mut statements : Vec<Box<Stmt>> = Vec::new();
 
-    if let Err(message) = result {
-        print_error(&message);
-        Err(message)
+    let mut has_error = false;
+
+    while let None = parser.matches(EOF) {
+        let stmt = statement(&mut parser);
+        match stmt {
+            Ok(stmt) => statements.push(stmt),
+            Err(message) => {
+                print_error(&message);
+                has_error = true;
+                // include error synchronization here
+            }
+        };
+    }
+
+    if has_error {
+        Err(error_message(parser.last_line, "Stopped because of parse error"))
     } else {
-        result
+        Ok(statements)
     }
 }
+
+// statement parsing
+
+fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+    if let Some(_) = parser.matches(PRINT) {
+        print_statement(parser)
+    } else {
+        expr_statement(parser)
+    }
+}
+
+fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+    let expr = expression(parser)?;
+
+    parser.expect(SEMICOLON, "Expect ';' after expression")?;
+
+    Ok(Box::new(Stmt::Expression { expr }))
+}
+
+fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+    parser.expect(LEFT_PAREN, "Expect '(' after 'print'")?;
+
+    let mut exprs : Vec<Box<Expr>> = Vec::new();
+
+    while !parser.at_end() && !parser.peek_eq(RIGHT_PAREN) {
+        let expr = expression(parser)?;
+
+        exprs.push(expr);
+
+        if let None = parser.matches(COMMA) {
+            break;
+        }
+    }
+
+    parser.expect(RIGHT_PAREN, "Expect ')' after expression")?;
+    parser.expect(SEMICOLON, "Expect ';' after print")?;
+
+    Ok(Box::new(Stmt::Print { exprs }))
+}
+
+// expression parsing
 
 fn expression(parser: &mut ParserState) -> Result<Box<Expr>, String>{
     ternary(parser)
@@ -60,7 +116,7 @@ fn binary(parser: &mut ParserState, precedence: usize) -> Result<Box<Expr>, Stri
 
 fn unary(parser: &mut ParserState) -> Result<Box<Expr>, String>{
     if let Some(operator) = parser.match_all(&[BANG, MINUS]) {
-        let expr = primary(parser)?;
+        let expr = unary(parser)?;
         Ok(Box::new(Expr::Unary{operator, expr}))
     } else {
         primary(parser)

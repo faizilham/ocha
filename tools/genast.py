@@ -13,6 +13,14 @@ AST = {
             "Variable   -> name: Token"
         ]
     ),
+
+    "Stmt":(
+        [ "ast::expr::Expr" ],
+        [
+            "Expression -> expr: Box<Expr>",
+            "Print      -> exprs: Vec<Box<Expr>>"
+        ]
+    )
 }
 
 TAB = " "*4

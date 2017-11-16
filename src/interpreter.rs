@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
-use ast::expr::{ExprVisitor, Expr};
+use ast::expr::{Expr, ExprVisitor};
+use ast::stmt::{Stmt, StmtVisitor};
 use token::Token;
 use token::TokenType::*;
 use value::Value;
@@ -15,18 +16,56 @@ impl Interpreter {
         Interpreter{}
     }
 
-    pub fn interpret(&mut self, expr: &Box<Expr>){
-        let result = self.evaluate(expr);
+    // pub fn interpret_expr(&mut self, expr: &Box<Expr>){
+    //     let result = self.evaluate(expr);
 
-        match result {
-            Ok(value) => println!("{}", value.to_string()),
-            Err(message) => print_error(&message)
-        };
+    //     match result {
+    //         Ok(value) => println!("{}", value.to_string()),
+    //         Err(message) => print_error(&message)
+    //     };
+    // }
+
+    pub fn interpret(&mut self, statements: &Vec<Box<Stmt>>){
+        for statement in statements {
+            if let Err(message) = self.execute(&statement) {
+                print_error(&message);
+                return;
+            }
+        }
+    }
+
+    fn execute(&mut self, stmt: &Box<Stmt>) -> Result<(), String>{
+        Stmt::accept(stmt, self)
     }
 
     fn evaluate(&mut self, expr: &Box<Expr>) -> Result<Rc<Value>, String> {
         Expr::accept(expr, self)
     }
+}
+
+impl StmtVisitor<Result<(), String>> for Interpreter {
+    fn visit_expression(&mut self, expr: &Box<Expr>) -> Result<(), String>{
+        self.evaluate(expr)?;
+        Ok(())
+    }
+
+    fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> Result<(), String>{
+        let mut values : Vec<Rc<Value>> = Vec::new();
+
+        for expr in exprs {
+            let value = self.evaluate(&expr)?;
+            values.push(value);
+        }
+
+        for value in values {
+            print!("{} ", (*value).to_string());
+        }
+
+        println!();
+
+        Ok(())
+    }
+
 }
 
 impl ExprVisitor<Result<Rc<Value>, String>> for Interpreter {

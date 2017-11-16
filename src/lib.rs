@@ -1,5 +1,5 @@
 mod ast;
-mod astprinter;
+// mod astprinter;
 mod error;
 mod interpreter;
 mod lexer;
@@ -19,17 +19,11 @@ pub fn run_file(filename : String) -> Result<(), String> {
     };
 
     let tokens = lexer::scan(contents)?;
-
-    let expr = parser::parse(tokens)?;
+    let statements = parser::parse(tokens)?;
 
     let mut inter = interpreter::Interpreter::new();
 
-    inter.interpret(&expr);
-
-    // let mut printer = astprinter::AstPrinter{};
-    // let result = printer.evaluate(&expr);
-
-    // println!("{}", result);
+    inter.interpret(&statements);
 
     Ok(())
 }
