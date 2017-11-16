@@ -1,15 +1,18 @@
 from types import MethodType
-output_dir = "src"
+output_dir = "src/ast"
 
 AST = {
-    "Expr": [
-        "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
-        "Grouping   -> expr: Box<Expr>",
-        "Literal    -> value: Value",
-        "Unary      -> operator: Token, expr: Box<Expr>",
-        "Ternary    -> condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr>",
-        "Variable   -> name: Token"
-    ],
+    "Expr": (
+        [ "token::Token", "value::Value"],
+        [
+            "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
+            "Grouping   -> expr: Box<Expr>",
+            "Literal    -> value: Value",
+            "Unary      -> operator: Token, expr: Box<Expr>",
+            "Ternary    -> condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr>",
+            "Variable   -> name: Token"
+        ]
+    ),
 }
 
 TAB = " "*4
@@ -58,13 +61,14 @@ def parse_types(type_data):
     
     return types
 
-def define_ast(basename, type_data):
+def define_ast(basename, imports, type_data):
     with open(output_dir + "/" + basename.lower() + ".rs", "w") as writer:
         extend_writer(writer)
 
-        writer.writeln("use token::Token;")
-        writer.writeln("use value::Value;")
-        writer.writeln()
+        for im in imports:
+            writer.writeln("use {};".format(im))
+
+        if len(imports) > 0: writer.writeln()
 
         types = parse_types(type_data)
             
@@ -106,5 +110,9 @@ def define_ast(basename, type_data):
         writer.end_block()
         writer.end_block()
 
-for (basename, types) in AST.items():
-    define_ast(basename, types)
+for (basename, (imports, types)) in AST.items():
+    define_ast(basename, imports, types)
+
+with open(output_dir + "/mod.rs", "w") as writer:
+    for basename in AST:
+        writer.write("pub mod {};\n".format(basename.lower()))

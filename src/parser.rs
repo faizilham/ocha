@@ -1,5 +1,5 @@
 use error::{error_message, print_error};
-use expr::Expr;
+use ast::expr::Expr;
 use token::{TokenType, Token};
 use token::TokenType::*;
 

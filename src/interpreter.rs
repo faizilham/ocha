@@ -1,4 +1,4 @@
-use expr::{ExprVisitor, Expr};
+use ast::expr::{ExprVisitor, Expr};
 use token::Token;
 use token::TokenType::*;
 use value::Value;
