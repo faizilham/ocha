@@ -47,6 +47,8 @@ fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
         print_statement(parser)
     } else if parser.matches(IF) {
         if_statement(parser)
+    } else if parser.matches(WHILE) {
+        while_statement(parser)
     } else {
         expr_statement(parser)
     }
@@ -74,6 +76,15 @@ fn if_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
     };
 
     Ok(Box::new(Stmt::If { condition, true_branch, false_branch }))
+}
+
+fn while_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+    parser.expect(LEFT_PAREN, "Expect '(' after 'while'")?;
+    let condition = expression(parser)?;
+    parser.expect(RIGHT_PAREN, "Expect ')' after condition")?;
+
+    let body = statement(parser)?;
+    Ok(Box::new(Stmt::While { condition, body }))    
 }
 
 fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {

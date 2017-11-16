@@ -78,6 +78,16 @@ impl StmtVisitor<Result<(), String>> for Interpreter {
         Ok(())
     }
 
+    fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> Result<(), String>{
+        loop {
+            let cond_value = self.evaluate(condition)?;
+            if !cond_value.to_bool() { break; }
+
+            self.execute(body)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl ExprVisitor<Result<Rc<Value>, String>> for Interpreter {
