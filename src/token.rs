@@ -1,7 +1,7 @@
 use value::Value;
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
     // Delimiters
     SEMICOLON, COMMA, DOT,
@@ -28,10 +28,6 @@ pub enum TokenType {
     PRINT, // temporarily, later will changed to standard lib function
 
     EOF
-}
-
-impl Clone for TokenType{
-    fn clone(&self) -> TokenType { *self }
 }
 
 #[derive(Debug)]

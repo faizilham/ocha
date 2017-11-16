@@ -34,8 +34,8 @@ impl ExprVisitor<Result<Value, String>> for Interpreter {
 
         let value = match operator.token_type {
             // equality
-            BANG_EQUAL      => Bool( !left_val.equals(&right_val) ),
-            EQUAL_EQUAL     => Bool( left_val.equals(&right_val) ),
+            BANG_EQUAL      => Bool( left_val != right_val ),
+            EQUAL_EQUAL     => Bool( left_val == right_val ),
             GREATER         => Bool( left_val.ordering(&right_val)? > 0 ),
             GREATER_EQUAL   => Bool( left_val.ordering(&right_val)? >= 0 ),
             LESS            => Bool( left_val.ordering(&right_val)? < 0 ),

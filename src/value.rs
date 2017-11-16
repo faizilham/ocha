@@ -22,17 +22,6 @@ impl Value {
         }
     }
 
-    pub fn equals(&self, other: &Value) -> bool {
-        match (self, other) {
-            (&Int(ref a), &Int(ref b)) => a == b,
-            (&Float(ref a), &Float(ref b)) => a == b,
-            (&Bool(ref a), &Bool(ref b)) => a == b,
-            (&Str(ref a), &Str(ref b)) => a == b,
-            (&Nil, &Nil) => true,
-            (_, _) => false
-        }
-    }
-
     pub fn ordering (&self, other: &Value) -> Result<i32, &'static str> {
         let order = match (self, other) {
             (&Int(ref a), &Int(ref b)) => if a > b { 1 } else if a < b { -1 } else { 0 },
@@ -63,6 +52,19 @@ impl Value {
             &Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
             &Str(ref s) => s.clone(),
             &Nil => String::from("nil")
+        }
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Value) -> bool {
+        match (self, other) {
+            (&Int(ref a), &Int(ref b)) => a == b,
+            (&Float(ref a), &Float(ref b)) => a == b,
+            (&Bool(ref a), &Bool(ref b)) => a == b,
+            (&Str(ref a), &Str(ref b)) => a == b,
+            (&Nil, &Nil) => true,
+            (_, _) => false
         }
     }
 }
