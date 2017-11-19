@@ -25,10 +25,10 @@ impl Value {
         Ok(order)
     }
 
-    pub fn to_bool(&self) -> bool {
+    pub fn is_truthy(&self) -> bool {
         match self {
             &Int(ref i) => *i != 0,
-            &Float(ref f) => (*f).abs() < EPSILON,
+            &Float(ref f) => *f < EPSILON && *f > -EPSILON,
             &Bool(ref b) => *b,
             &Str(ref s) => s.len() > 0,
             &Nil => false

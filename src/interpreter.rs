@@ -62,7 +62,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
     fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> Result<(), Exception>{
         let cond_value = self.evaluate(condition)?;
 
-        if cond_value.to_bool() {
+        if cond_value.is_truthy() {
             self.execute(true_branch)?;
         } else if let &Some(ref else_branch) = false_branch {
             self.execute(else_branch)?;
@@ -91,7 +91,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> Result<(), Exception>{
         loop {
             let cond_value = self.evaluate(condition)?;
-            if !cond_value.to_bool() { break; }
+            if !cond_value.is_truthy() { break; }
 
             self.execute(body)?;
         }
@@ -173,7 +173,7 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
         let value = &*self.evaluate(expr)?;
 
         let value = match operator.token_type {
-            BANG    => Bool(!value.to_bool()),
+            BANG    => Bool(!value.is_truthy()),
             MINUS   => match value {
                         &Int(value) => Value::Int(-value),
                         &Float(value) => Value::Float(-value),
@@ -188,7 +188,7 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
     fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> Result<Rc<Value>, Exception> {
         let cond_value = &*self.evaluate(condition)?;
 
-        if cond_value.to_bool() {
+        if cond_value.is_truthy() {
             self.evaluate(true_branch)
         } else {
             self.evaluate(false_branch)    
@@ -201,10 +201,9 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
 }
 
 fn order_value (line: i32, left_val: &Value, right_val: &Value) -> Result<i32, Exception> {
-    match left_val.ordering(right_val) {
-        Ok(order) => Ok(order),
-        Err(message) => Err(RuntimeErr(line, String::from(message)))
-    }
+    left_val.ordering(right_val).map_err(|message| {
+        RuntimeErr(line, String::from(message))
+    })
 }
 
 fn err(line : i32, message : &str) -> Result<Rc<Value>, Exception> {

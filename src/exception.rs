@@ -3,11 +3,13 @@ pub enum Exception {
     RuntimeErr(i32, String) // line, message
 }
 
+use self::Exception::*;
+
 impl Exception {
     pub fn print(&self) {
         match self {
-            &Exception::ParseErr(ref line, ref message) => report_error(*line, message),
-            &Exception::RuntimeErr(ref line, ref message) => report_error(*line, message),
+            &ParseErr(ref line, ref message) => report_error(*line, message),
+            &RuntimeErr(ref line, ref message) => report_error(*line, message),
         };
     }
 }
