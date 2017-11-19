@@ -1,5 +1,6 @@
 mod ast;
 // mod astprinter;
+mod environment;
 mod exception;
 mod interpreter;
 mod lexer;

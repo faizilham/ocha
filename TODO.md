@@ -3,8 +3,8 @@ Todo List
 1. Lexer & Parser Base ✔️
 2. Basic Interpreter:
     - basic logic & arithmetic expression ✔️
-    - control & loop statement
-    - variable declaration
+    - control & loop statement ✔️
+    - variable declaration ✔️
     - list & object creation
     - function declaration
 3. Resolver

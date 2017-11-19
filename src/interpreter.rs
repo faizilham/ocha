@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use ast::expr::{Expr, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
+use environment::Environment;
 use exception::Exception;
 use exception::Exception::RuntimeErr;
 use token::Token;
@@ -9,11 +10,13 @@ use token::TokenType::*;
 use value::Value;
 use value::Value::*;
 
-pub struct Interpreter {}
+pub struct Interpreter {
+    env: Environment
+}
 
 impl Interpreter {
     pub fn new() -> Interpreter {
-        Interpreter{}
+        Interpreter{env: Environment::new()}
     }
 
     // pub fn interpret_expr(&mut self, expr: &Box<Expr>){
@@ -47,7 +50,12 @@ impl Interpreter {
 
 impl StmtVisitor<Result<(), Exception>> for Interpreter {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> Result<(), Exception>{
-        err_stmt(name.line, "not yet implemented")
+        self.env.check_declared(name)?;
+
+        let value = self.evaluate(expr)?;
+        self.env.put(name, value);
+        
+        Ok(())
     }
 
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> Result<(), Exception>{
@@ -92,7 +100,10 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
     }
 
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> Result<(), Exception>{
-        err_stmt(name.line, "not yet implemented")
+        let value = self.evaluate(expr)?;
+        self.env.put(name, value);
+
+        Ok(())
     }
 
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> Result<(), Exception>{
@@ -203,7 +214,7 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
     }
 
     fn visit_variable(&mut self, name: &Token) -> Result<Rc<Value>, Exception> {
-        err(name.line, "not yet implemented")
+        self.env.get(name)
     }
 }
 
@@ -214,9 +225,5 @@ fn order_value (line: i32, left_val: &Value, right_val: &Value) -> Result<i32, E
 }
 
 fn err(line : i32, message : &str) -> Result<Rc<Value>, Exception> {
-    Err(RuntimeErr(line, String::from(message)))
-}
-
-fn err_stmt(line : i32, message : &str) -> Result<(), Exception> {
     Err(RuntimeErr(line, String::from(message)))
 }
