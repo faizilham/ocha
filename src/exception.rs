@@ -1,6 +1,7 @@
 pub enum Exception {
     ParseErr(i32, String), // line, message
-    RuntimeErr(i32, String) // line, message
+    RuntimeErr(i32, String), // line, message
+    BreakException
 }
 
 use self::Exception::*;
@@ -10,6 +11,7 @@ impl Exception {
         match self {
             &ParseErr(ref line, ref message) => report_error(*line, message),
             &RuntimeErr(ref line, ref message) => report_error(*line, message),
+            _ => ()
         };
     }
 }

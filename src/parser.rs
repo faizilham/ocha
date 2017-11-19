@@ -74,6 +74,8 @@ fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
         if_statement(parser)
     } else if parser.matches(WHILE) {
         while_statement(parser)
+    } else if parser.peek_eq(BREAK){
+        break_statement(parser)
     } else {
         expr_statement(parser)
     }
@@ -89,6 +91,17 @@ fn block(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     parser.expect(RIGHT_BRACE, "Expect '}' at the end of block")?;
 
     Ok(Box::new(Stmt::Block { body }))
+}
+
+fn break_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+    let token = parser.advance().unwrap();
+    parser.expect(SEMICOLON, "Expect ';' after break")?;
+
+    if parser.loop_level == 0 {
+        return Err(parser.exception("Invalid break outside of loop"));
+    }
+
+    Ok(Box::new(Stmt::Break { token }))
 }
 
 fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
@@ -110,7 +123,7 @@ fn assignment(parser: &mut ParserState, variable: Box<Expr>) -> Result<Box<Stmt>
 
         Ok(Box::new(Stmt::Assignment{name, expr}))
     } else {
-        Err(parser.error("Invalid assignment target"))
+        Err(parser.exception("Invalid assignment target"))
     }
 }
 
@@ -135,7 +148,9 @@ fn while_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let condition = expression(parser)?;
     parser.expect(RIGHT_PAREN, "Expect ')' after condition")?;
 
+    parser.loop_level += 1;
     let body = statement(parser)?;
+    parser.loop_level -= 1;
     Ok(Box::new(Stmt::While { condition, body }))    
 }
 
@@ -210,7 +225,7 @@ fn primary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
         NUMBER | NIL | TRUE | FALSE | STRING => Expr::Literal { value: Rc::new(token.literal) },
         IDENTIFIER => Expr::Variable{name: token},
         LEFT_PAREN => return grouping(parser),
-        _ => return Err(parser.error("Expect expression"))
+        _ => return Err(parser.exception("Expect expression"))
     };
 
     Ok(Box::new(expr))
@@ -225,12 +240,13 @@ fn grouping(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
 
 struct ParserState {
     tokens: Vec<Token>,
-    last_line: i32
+    last_line: i32,
+    loop_level: i32
 }
 
 impl ParserState {
     fn new(tokens : Vec<Token>) -> ParserState {
-        ParserState{tokens: tokens, last_line: 1}
+        ParserState{tokens: tokens, last_line: 1, loop_level: 0}
     }
 
     fn at_end(&self) -> bool{
@@ -279,11 +295,11 @@ impl ParserState {
     fn expect(&mut self, token_type: TokenType, message: &str) -> Result<Token, Exception>{
         match self.get_matches(token_type) {
             Some(token) => Ok(token),
-            None => Err(self.error(message))
+            None => Err(self.exception(message))
         }
     }
 
-    fn error(&self, message: &str) -> Exception{
+    fn exception(&self, message: &str) -> Exception{
         ParseErr(self.last_line, String::from(message))
     }
 

@@ -5,6 +5,7 @@ use ast::stmt::{Stmt, StmtVisitor};
 use environment::Environment;
 use exception::Exception;
 use exception::Exception::RuntimeErr;
+use exception::Exception::BreakException;
 use token::Token;
 use token::TokenType::*;
 use value::Value;
@@ -65,6 +66,11 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
         Ok(())
     }
 
+    fn visit_break(&mut self, _: &Token) -> Result<(), Exception>{
+        Err(BreakException)
+    }
+
+
     fn visit_expression(&mut self, expr: &Box<Expr>) -> Result<(), Exception>{
         self.evaluate(expr)?;
         Ok(())
@@ -111,7 +117,11 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
             let cond_value = self.evaluate(condition)?;
             if !cond_value.is_truthy() { break; }
 
-            self.execute(body)?;
+            match self.execute(body) {
+                Err(BreakException) => break,
+                Err(e) => return Err(e),
+                _ => ()
+            }
         }
 
         Ok(())
