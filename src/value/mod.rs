@@ -1,4 +1,7 @@
-use std::f64::EPSILON;
+use std::rc::Rc;
+
+pub mod list;
+use self::list::VecList;
 
 #[derive(Debug)]
 pub enum Value {
@@ -6,6 +9,7 @@ pub enum Value {
     Float(f64),
     Bool(bool),
     Str(String),
+    List(Rc<VecList>),
     Nil
 }
 
@@ -17,9 +21,7 @@ impl Value {
             (&Int(ref a), &Int(ref b)) => if a > b { 1 } else if a < b { -1 } else { 0 },
             (&Float(ref a), &Float(ref b)) => if a > b { 1 } else if a < b { -1 } else { 0 },
             (&Str(ref a), &Str(ref b)) => if a > b { 1 } else if a < b { -1 } else { 0 },
-            (&Bool(_), &Bool(_)) => return Err("Cannot compare two boolean values"),            
-            (&Nil, &Nil) => return Err("Cannot compare two nil values"),
-            (_, _) => return Err("Cannot compare two different type values")
+            (_, _) => return Err("Invalid type for partial ordering")
         };
 
         Ok(order)
@@ -27,11 +29,9 @@ impl Value {
 
     pub fn is_truthy(&self) -> bool {
         match self {
-            &Int(ref i) => *i != 0,
-            &Float(ref f) => *f < EPSILON && *f > -EPSILON,
             &Bool(ref b) => *b,
-            &Str(ref s) => s.len() > 0,
-            &Nil => false
+            &Nil => false,
+            _ => true
         }
     }
 
@@ -41,6 +41,7 @@ impl Value {
             &Float(ref f) => format!("{}", f),
             &Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
             &Str(ref s) => s.clone(),
+            &List(_) => String::from("[List]"),
             &Nil => String::from("nil")
         }
     }
@@ -53,6 +54,7 @@ impl PartialEq for Value {
             (&Float(ref a), &Float(ref b)) => a == b,
             (&Bool(ref a), &Bool(ref b)) => a == b,
             (&Str(ref a), &Str(ref b)) => a == b,
+            (&List(ref a), &List(ref b)) => Rc::ptr_eq(a, b),
             (&Nil, &Nil) => true,
             (_, _) => false
         }
@@ -66,6 +68,7 @@ impl Clone for Value {
             &Float(ref f) => Float(*f),
             &Bool(ref b) => Bool(*b),
             &Str(ref s) => Str(s.clone()),
+            &List(ref l) => List(l.clone()),
             &Nil => Nil
         }
     }

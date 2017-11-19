@@ -10,6 +10,7 @@ use token::Token;
 use token::TokenType::*;
 use value::Value;
 use value::Value::*;
+use value::list::VecList;
 
 pub struct Interpreter {
     env: Environment
@@ -188,6 +189,21 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
         Ok(Rc::new(value))
     }
 
+    fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> Result<Rc<Value>, Exception> {
+        if let List(ref list) = *self.evaluate(variable)? {
+            if let Int(index) = *self.evaluate(member)? {
+                match list.get(index) {
+                    Ok(value) => Ok(value),
+                    Err(message) => err(operator.line, message)
+                }                
+            } else {
+                err(operator.line, "Invalid member type for get operator")
+            }
+        } else {
+            err(operator.line, "Invalid container type for get operator")
+        }
+    }
+
     fn visit_grouping(&mut self, expr: &Box<Expr>) -> Result<Rc<Value>, Exception> {
         self.evaluate(expr)
     }
@@ -195,6 +211,17 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
     fn visit_literal(&mut self, value: &Rc<Value>) -> Result<Rc<Value>, Exception> {
         // optimize this so it doesn't need copying
         Ok(value.clone())
+    }
+
+    fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> Result<Rc<Value>, Exception> {
+        let mut list = VecList::new();
+
+        for expr in exprs {
+            let value = self.evaluate(expr)?;
+            list.push(value);
+        }
+
+        Ok(Rc::new(Value::List(Rc::new(list))))
     }
 
     fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> Result<Rc<Value>, Exception> {

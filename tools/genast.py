@@ -5,9 +5,12 @@ AST = {
     "Expr": (
         [ "std::rc::Rc", "token::Token", "value::Value"],
         [
+            
             "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
+            "Get        -> variable: Box<Expr>, operator: Token, member: Box<Expr>",
             "Grouping   -> expr: Box<Expr>",
             "Literal    -> value: Rc<Value>",
+            "ListInit   -> exprs: Vec<Box<Expr>>",
             "Unary      -> operator: Token, expr: Box<Expr>",
             "Ternary    -> condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr>",
             "Variable   -> name: Token"

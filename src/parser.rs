@@ -215,8 +215,20 @@ fn unary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
         let expr = unary(parser)?;
         Ok(Box::new(Expr::Unary{operator, expr}))
     } else {
-        primary(parser)
+        call(parser)
     }
+}
+
+fn call(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
+    let mut expr = primary(parser)?;
+
+    while let Some(operator) = parser.get_matches(LEFT_SQUARE) {
+        let member = expression(parser)?;
+        parser.expect(RIGHT_SQUARE, "Expect ']")?;
+        expr = Box::new(Expr::Get {variable: expr, operator, member});
+    }
+
+    Ok(expr)
 }
 
 fn primary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
@@ -224,6 +236,7 @@ fn primary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
     let expr = match token.token_type {
         NUMBER | NIL | TRUE | FALSE | STRING => Expr::Literal { value: Rc::new(token.literal) },
         IDENTIFIER => Expr::Variable{name: token},
+        LEFT_SQUARE => return list_init(parser),
         LEFT_PAREN => return grouping(parser),
         _ => return Err(parser.exception("Expect expression"))
     };
@@ -236,6 +249,24 @@ fn grouping(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
     parser.expect(RIGHT_PAREN, "Expect ')'")?;
 
     Ok(Box::new(Expr::Grouping{expr}))
+}
+
+fn list_init(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
+    let mut exprs : Vec<Box<Expr>> = Vec::new();
+
+    while !parser.at_end() && !parser.peek_eq(RIGHT_SQUARE) {
+        let expr = expression(parser)?;
+
+        exprs.push(expr);
+
+        if !parser.matches(COMMA) {
+            break;
+        }
+    }
+
+    parser.expect(RIGHT_SQUARE, "Expect ']' after list expression")?;
+
+    Ok(Box::new(Expr::ListInit {exprs}))
 }
 
 struct ParserState {
