@@ -1,19 +1,18 @@
+use exception::Exception;
+use exception::Exception::ParseErr;
 use token::{Token, TokenType};
 use token::TokenType::*;
 use value::Value;
 
-use error::report_error;
-
-pub fn scan(source_string : String) -> Result<Vec<Token>, String> {
-    let source = source_string.chars().collect();
+pub fn scan(source_string : String) -> Result<Vec<Token>, ()> {
     let mut tokens = Vec::new();
-    let mut lexer = LexerState::new(&source);
+    let mut lexer = LexerState::new(&source_string);
     let mut has_error = false;
 
     while !lexer.at_end() {
         lexer.start = lexer.current;
-        if let Err(message) = scan_token(&mut lexer, &mut tokens) {
-            report_error(lexer.line, &message);
+        if let Err(exception) = scan_token(&mut lexer, &mut tokens) {
+            exception.print();
             has_error = true;
         }
     }
@@ -22,11 +21,11 @@ pub fn scan(source_string : String) -> Result<Vec<Token>, String> {
         tokens.push(Token::new(EOF, String::new(), Value::Nil, lexer.line));
         Ok(tokens)
     } else {
-        Err(format!("stopped because of lexer error"))
+        Err(())
     }
 }
 
-fn scan_token(lexer : &mut LexerState, tokens : &mut Vec<Token>) -> Result<(), String>{
+fn scan_token(lexer : &mut LexerState, tokens : &mut Vec<Token>) -> Result<(), Exception>{
     let c = lexer.advance();
 
     let token = match c {
@@ -76,7 +75,7 @@ fn scan_token(lexer : &mut LexerState, tokens : &mut Vec<Token>) -> Result<(), S
                 } else if is_whitespace(c) {
                     return consume_whitespace(lexer);
                 } else {
-                    return Err(format!("Unknown token {}", c));
+                    return Err(lexer.error(&format!("Unexpected token {}", c)));
                 }
     }?;
 
@@ -84,7 +83,7 @@ fn scan_token(lexer : &mut LexerState, tokens : &mut Vec<Token>) -> Result<(), S
     Ok(())
 }
 
-fn string(lexer : &mut LexerState) -> Result<Token, String>{
+fn string(lexer : &mut LexerState) -> Result<Token, Exception>{
     let mut escape_backslash = false;
     let mut value = String::new();
 
@@ -106,13 +105,13 @@ fn string(lexer : &mut LexerState) -> Result<Token, String>{
     }
 
     if lexer.previous() != '"' {
-        return Err(format!("Expect '\"' after string"));
+        return Err(lexer.error("Expect '\"' after string"));
     }
 
     lexer.create_literal(STRING, Value::Str(value))
 }
 
-fn number(lexer : &mut LexerState) -> Result<Token, String>{
+fn number(lexer : &mut LexerState) -> Result<Token, Exception>{
     let mut is_integer = true;
 
     while is_numeric(lexer.peek()) {
@@ -140,7 +139,7 @@ fn number(lexer : &mut LexerState) -> Result<Token, String>{
     }
 }
 
-fn identifier(lexer : &mut LexerState) -> Result<Token, String>{
+fn identifier(lexer : &mut LexerState) -> Result<Token, Exception>{
     while is_id_part(lexer.peek()){
         lexer.advance();
     }
@@ -156,7 +155,7 @@ fn identifier(lexer : &mut LexerState) -> Result<Token, String>{
     }
 }
 
-fn consume_line_comment(lexer : &mut LexerState) -> Result<(), String> {
+fn consume_line_comment(lexer : &mut LexerState) -> Result<(), Exception> {
     while !lexer.matches('\n') { // comments
         lexer.advance();
     };
@@ -165,7 +164,7 @@ fn consume_line_comment(lexer : &mut LexerState) -> Result<(), String> {
     Ok(())
 }
 
-fn consume_multiline_comment(lexer : &mut LexerState) -> Result<(), String> {
+fn consume_multiline_comment(lexer : &mut LexerState) -> Result<(), Exception> {
     let mut prev_star = false;
     while !lexer.at_end(){
         let c = lexer.advance();
@@ -181,10 +180,10 @@ fn consume_multiline_comment(lexer : &mut LexerState) -> Result<(), String> {
         }
     }
 
-    Err(format!("Expect '*/' at the end of multiline comment"))
+    Err(lexer.error("Expect '*/' at the end of multiline comment"))
 }
 
-fn consume_whitespace(lexer : &mut LexerState) -> Result<(), String> {
+fn consume_whitespace(lexer : &mut LexerState) -> Result<(), Exception> {
     if lexer.previous() == '\n' {
         lexer.line += 1;
     }
@@ -198,15 +197,16 @@ fn consume_whitespace(lexer : &mut LexerState) -> Result<(), String> {
     Ok(())
 }
 
-struct LexerState<'a> {
+struct LexerState {
     start: usize,
     current: usize,
     line: i32,
-    source: &'a Vec<char>
+    source: Vec<char>
 }
 
-impl<'a> LexerState<'a> {
-    fn new (source : &'a Vec<char>) -> LexerState<'a>{
+impl LexerState {
+    fn new (source_string : &String) -> LexerState{
+        let source = source_string.chars().collect();
         return LexerState { start: 0, current: 0, line: 1, source};
     }
 
@@ -256,16 +256,20 @@ impl<'a> LexerState<'a> {
         }
     }
 
-    fn create_token(&self, token_type: TokenType) -> Result<Token, String> {
+    fn create_token(&self, token_type: TokenType) -> Result<Token, Exception> {
         let lexeme = self.get_current_lexeme();
         
         Ok(Token::new(token_type, lexeme, Value::Nil, self.line))
     }
 
-    fn create_literal(&self, token_type: TokenType, literal: Value) -> Result<Token, String> {
+    fn create_literal(&self, token_type: TokenType, literal: Value) -> Result<Token, Exception> {
         let lexeme = self.get_current_lexeme();
 
         Ok(Token::new(token_type, lexeme, literal, self.line))
+    }
+
+    fn error(&self, message: &str) -> Exception {
+        ParseErr ( self.line, String::from(message) )
     }
 
     fn get_current_lexeme(&self) -> String {

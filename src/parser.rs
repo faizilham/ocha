@@ -1,8 +1,9 @@
+use exception::Exception;
+use exception::Exception::ParseErr;
 use std::rc::Rc;
 use ast::expr::Expr;
 use ast::stmt::Stmt;
 
-use error::{error_message, print_error};
 use token::{TokenType, Token};
 use token::TokenType::*;
 
@@ -14,7 +15,7 @@ static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
     [SLASH, STAR, EOF, EOF]
 ];
 
-pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, String> {
+pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, ()> {
     let mut parser = ParserState::new(tokens);
 
     let mut statements : Vec<Box<Stmt>> = Vec::new();
@@ -25,24 +26,24 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, String> {
         let stmt = statement(&mut parser);
         match stmt {
             Ok(stmt) => statements.push(stmt),
-            Err(message) => {
-                print_error(&message);
+            Err(exception) => {
+                exception.print();
                 has_error = true;
                 // include error synchronization here
             }
         };
     }
 
-    if has_error {
-        Err(error_message(parser.last_line, "Stopped because of parse error"))
-    } else {
+    if !has_error {
         Ok(statements)
+    } else {
+        Err(())
     }
 }
 
 // statement parsing
 
-fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     if parser.matches(LEFT_BRACE) {
         block_statement(parser)
     } else if parser.matches(PRINT) {
@@ -56,7 +57,7 @@ fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
     }
 }
 
-fn block_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+fn block_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let mut body : Vec<Box<Stmt>> = Vec::new();
 
     while !parser.at_end() && !parser.peek_eq(RIGHT_BRACE) {
@@ -68,7 +69,7 @@ fn block_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
     Ok(Box::new(Stmt::Block { body }))
 }
 
-fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let expr = expression(parser)?;
 
     parser.expect(SEMICOLON, "Expect ';' after expression")?;
@@ -76,7 +77,7 @@ fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
     Ok(Box::new(Stmt::Expression { expr }))
 }
 
-fn if_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+fn if_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     parser.expect(LEFT_PAREN, "Expect '(' after 'if'")?;
     let condition = expression(parser)?;
     parser.expect(RIGHT_PAREN, "Expect ')' after condition")?;
@@ -92,7 +93,7 @@ fn if_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
     Ok(Box::new(Stmt::If { condition, true_branch, false_branch }))
 }
 
-fn while_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+fn while_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     parser.expect(LEFT_PAREN, "Expect '(' after 'while'")?;
     let condition = expression(parser)?;
     parser.expect(RIGHT_PAREN, "Expect ')' after condition")?;
@@ -101,7 +102,7 @@ fn while_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
     Ok(Box::new(Stmt::While { condition, body }))    
 }
 
-fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
+fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     parser.expect(LEFT_PAREN, "Expect '(' after 'print'")?;
 
     let mut exprs : Vec<Box<Expr>> = Vec::new();
@@ -124,11 +125,11 @@ fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, String> {
 
 // expression parsing
 
-fn expression(parser: &mut ParserState) -> Result<Box<Expr>, String>{
+fn expression(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
     ternary(parser)
 }
 
-fn ternary(parser: &mut ParserState) -> Result<Box<Expr>, String> {
+fn ternary(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
     let mut expr = binary(parser, 0)?;
 
     if parser.matches(QUESTION) {
@@ -142,7 +143,7 @@ fn ternary(parser: &mut ParserState) -> Result<Box<Expr>, String> {
     Ok(expr)
 }
 
-fn binary(parser: &mut ParserState, precedence: usize) -> Result<Box<Expr>, String>{
+fn binary(parser: &mut ParserState, precedence: usize) -> Result<Box<Expr>, Exception>{
     if precedence >= BINARY_PRECEDENCE.len() {
         return unary(parser);
     }
@@ -157,7 +158,7 @@ fn binary(parser: &mut ParserState, precedence: usize) -> Result<Box<Expr>, Stri
     Ok(expr)
 }
 
-fn unary(parser: &mut ParserState) -> Result<Box<Expr>, String>{
+fn unary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
     if let Some(operator) = parser.match_all(&[BANG, MINUS]) {
         let expr = unary(parser)?;
         Ok(Box::new(Expr::Unary{operator, expr}))
@@ -166,19 +167,19 @@ fn unary(parser: &mut ParserState) -> Result<Box<Expr>, String>{
     }
 }
 
-fn primary(parser: &mut ParserState) -> Result<Box<Expr>, String>{
+fn primary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
     let token = parser.advance().unwrap();
     let expr = match token.token_type {
         NUMBER | NIL | TRUE | FALSE | STRING => Expr::Literal { value: Rc::new(token.literal) },
         IDENTIFIER => Expr::Variable{name: token},
         LEFT_PAREN => return grouping(parser),
-        _ => return Err(error_message(parser.last_line, "Expect expression"))
+        _ => return Err(parser.error("Expect expression"))
     };
 
     Ok(Box::new(expr))
 }
 
-fn grouping(parser: &mut ParserState) -> Result<Box<Expr>, String> {
+fn grouping(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
     let expr = expression(parser)?;
     parser.expect(RIGHT_PAREN, "Expect ')'")?;
 
@@ -238,11 +239,15 @@ impl ParserState {
         }
     }
 
-    fn expect(&mut self, token_type: TokenType, message: &str) -> Result<Token, String>{
+    fn expect(&mut self, token_type: TokenType, message: &str) -> Result<Token, Exception>{
         match self.get_matches(token_type) {
             Some(token) => Ok(token),
-            None => Err(error_message(self.last_line, message))
+            None => Err(self.error(message))
         }
+    }
+
+    fn error(&self, message: &str) -> Exception{
+        ParseErr(self.last_line, String::from(message))
     }
 
     fn match_all(&mut self, token_types: &[TokenType]) -> Option<Token> {
