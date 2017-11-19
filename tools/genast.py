@@ -15,12 +15,14 @@ AST = {
     ),
 
     "Stmt":(
-        [ "ast::expr::Expr" ],
+        [ "ast::expr::Expr", "token::Token" ],
         [
+            "Assignment -> name: Token, expr: Box<Expr>",
             "Block      -> body: Vec<Box<Stmt>>",
             "Expression -> expr: Box<Expr>",
             "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>",
+            "VarDecl    -> name: Token, expr: Box<Expr>",
             "While      -> condition: Box<Expr>, body: Box<Stmt>",   
         ]
     )

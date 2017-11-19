@@ -6,6 +6,7 @@ use ast::stmt::Stmt;
 
 use token::{TokenType, Token};
 use token::TokenType::*;
+use value::Value;
 
 // use EOF as padding
 static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
@@ -23,7 +24,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, ()> {
     let mut has_error = false;
 
     while !parser.matches(EOF) {
-        let stmt = statement(&mut parser);
+        let stmt = declaration(&mut parser);
         match stmt {
             Ok(stmt) => statements.push(stmt),
             Err(exception) => {
@@ -42,10 +43,31 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, ()> {
 }
 
 // statement parsing
+fn declaration(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+    if parser.matches(LET) {
+        var_declaration(parser)
+    } else {
+        statement(parser)
+    }
+}
+
+fn var_declaration(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+    let name = parser.expect(IDENTIFIER, "Expect identifier name")?;
+    
+    let expr = if parser.matches(EQUAL) {
+        expression(parser)?
+    } else {
+        Box::new(Expr::Literal { value: Rc::new(Value::Nil) })
+    };
+
+    parser.expect(SEMICOLON, "Expect ';' after variable declaration")?;
+
+    Ok(Box::new(Stmt::VarDecl { name, expr }))
+}
 
 fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     if parser.matches(LEFT_BRACE) {
-        block_statement(parser)
+        block(parser)
     } else if parser.matches(PRINT) {
         print_statement(parser)
     } else if parser.matches(IF) {
@@ -57,11 +79,11 @@ fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     }
 }
 
-fn block_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+fn block(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let mut body : Vec<Box<Stmt>> = Vec::new();
 
     while !parser.at_end() && !parser.peek_eq(RIGHT_BRACE) {
-        body.push(statement(parser)?);
+        body.push(declaration(parser)?);
     }
 
     parser.expect(RIGHT_BRACE, "Expect '}' at the end of block")?;
@@ -72,9 +94,24 @@ fn block_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
 fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let expr = expression(parser)?;
 
+    if parser.matches(EQUAL) {
+        return assignment(parser, expr);
+    }
+
     parser.expect(SEMICOLON, "Expect ';' after expression")?;
 
     Ok(Box::new(Stmt::Expression { expr }))
+}
+
+fn assignment(parser: &mut ParserState, variable: Box<Expr>) -> Result<Box<Stmt>, Exception> {
+    if let Expr::Variable{ name } = *variable {
+        let expr = expression(parser)?;
+        parser.expect(SEMICOLON, "Expect ';' after expression")?;
+
+        Ok(Box::new(Stmt::Assignment{name, expr}))
+    } else {
+        Err(parser.error("Invalid assignment target"))
+    }
 }
 
 fn if_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {

@@ -46,13 +46,16 @@ impl Interpreter {
 }
 
 impl StmtVisitor<Result<(), Exception>> for Interpreter {
+    fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> Result<(), Exception>{
+        err_stmt(name.line, "not yet implemented")
+    }
+
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> Result<(), Exception>{
         for statement in body {
             self.execute(statement)?;
         }
         Ok(())
     }
-
 
     fn visit_expression(&mut self, expr: &Box<Expr>) -> Result<(), Exception>{
         self.evaluate(expr)?;
@@ -86,6 +89,10 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
         println!();
 
         Ok(())
+    }
+
+    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> Result<(), Exception>{
+        err_stmt(name.line, "not yet implemented")
     }
 
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> Result<(), Exception>{
@@ -207,5 +214,9 @@ fn order_value (line: i32, left_val: &Value, right_val: &Value) -> Result<i32, E
 }
 
 fn err(line : i32, message : &str) -> Result<Rc<Value>, Exception> {
+    Err(RuntimeErr(line, String::from(message)))
+}
+
+fn err_stmt(line : i32, message : &str) -> Result<(), Exception> {
     Err(RuntimeErr(line, String::from(message)))
 }
