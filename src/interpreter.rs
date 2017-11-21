@@ -45,7 +45,7 @@ impl Interpreter {
         Stmt::accept(stmt, self)
     }
 
-    fn evaluate(&mut self, expr: &Box<Expr>) -> Result<Rc<Value>, Exception> {
+    fn evaluate(&mut self, expr: &Box<Expr>) -> Result<Value, Exception> {
         Expr::accept(expr, self)
     }
 }
@@ -90,7 +90,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
     }
 
     fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> Result<(), Exception>{
-        let mut values : Vec<Rc<Value>> = Vec::new();
+        let mut values : Vec<Value> = Vec::new();
 
         for expr in exprs {
             let value = self.evaluate(&expr)?;
@@ -98,7 +98,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
         }
 
         for value in values {
-            print!("{} ", (*value).to_string());
+            print!("{} ", value.to_string());
         }
 
         println!();
@@ -129,10 +129,10 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
     }
 }
 
-impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
-    fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> Result<Rc<Value>, Exception> {
-        let left_val = &*self.evaluate(left)?;
-        let right_val = &*self.evaluate(right)?;
+impl ExprVisitor<Result<Value, Exception>> for Interpreter {
+    fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> Result<Value, Exception> {
+        let left_val = self.evaluate(left)?;
+        let right_val = self.evaluate(right)?;
         let line = operator.line;
 
         let value = match operator.token_type {
@@ -145,40 +145,40 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
             LESS_EQUAL      => Bool( order_value(line, &left_val, &right_val)? <= 0 ),
             
             STAR            => match (left_val, right_val) {
-                                (&Int(ref a), &Int(ref b))        => Int(a * b),
-                                (&Float(ref a), &Float(ref b))    => Float(a * b),
-                                (&Int(ref a), &Float(ref b))      => Float((*a as f64) * b),
-                                (&Float(ref a), &Int(ref b))      => Float(a * (*b as f64)),
+                                (Int(ref a), Int(ref b))        => Int(a * b),
+                                (Float(ref a), Float(ref b))    => Float(a * b),
+                                (Int(ref a), Float(ref b))      => Float((*a as f64) * b),
+                                (Float(ref a), Int(ref b))      => Float(a * (*b as f64)),
 
                                 (_, _) => return err(line, "Invalid type for operator *")
                             },
 
             MINUS           => match (left_val, right_val) {
-                                (&Int(ref a), &Int(ref b))        => Int(a - b),
-                                (&Float(ref a), &Float(ref b))    => Float(a - b),
-                                (&Int(ref a), &Float(ref b))      => Float((*a as f64) - b),
-                                (&Float(ref a), &Int(ref b))      => Float(a - (*b as f64)),
+                                (Int(ref a), Int(ref b))        => Int(a - b),
+                                (Float(ref a), Float(ref b))    => Float(a - b),
+                                (Int(ref a), Float(ref b))      => Float((*a as f64) - b),
+                                (Float(ref a), Int(ref b))      => Float(a - (*b as f64)),
 
                                 (_, _) => return err(line, "Invalid type for operator -")
                             },
 
             SLASH           => match (left_val, right_val) {
-                                (&Float(ref a), &Float(ref b))    => Float(a / b),
-                                (&Int(ref a), &Float(ref b))      => Float((*a as f64) / b),
-                                (&Float(ref a), &Int(ref b))      => Float(a / (*b as f64)),
-                                (&Int(_), &Int(0))                => return err(line, "Division by zero"),
-                                (&Int(ref a), &Int(ref b))        => Int(a / b),
+                                (Float(ref a), Float(ref b))    => Float(a / b),
+                                (Int(ref a), Float(ref b))      => Float((*a as f64) / b),
+                                (Float(ref a), Int(ref b))      => Float(a / (*b as f64)),
+                                (Int(_), Int(0))                => return err(line, "Division by zero"),
+                                (Int(ref a), Int(ref b))        => Int(a / b),
                                 
                                 (_, _) => return err(line, "Invalid type for operator /")
                             },
 
             PLUS            => match (left_val, right_val) {
-                                (&Int(ref a), &Int(ref b))        => Int(a + b),
-                                (&Float(ref a), &Float(ref b))    => Float(a - b),
-                                (&Int(ref a), &Float(ref b))      => Float((*a as f64) + b),
-                                (&Float(ref a), &Int(ref b))      => Float(a + (*b as f64)),
-                                (&Str(ref a), ref b)              => Str( format!("{}{}", a, b.to_string()) ),
-                                (ref a, &Str(ref b))              => Str( format!("{}{}", a.to_string(), b) ),
+                                (Int(ref a), Int(ref b))        => Int(a + b),
+                                (Float(ref a), Float(ref b))    => Float(a - b),
+                                (Int(ref a), Float(ref b))      => Float((*a as f64) + b),
+                                (Float(ref a), Int(ref b))      => Float(a + (*b as f64)),
+                                (Str(ref a), ref b)              => Str( Rc::new(format!("{}{}", a, b.to_string())) ),
+                                (ref a, Str(ref b))              => Str( Rc::new(format!("{}{}", a.to_string(), b)) ),
 
                                 (_, _) => return err(line, "Invalid type for operator +")
                             },
@@ -186,12 +186,12 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
             _ => return err(line, "Operator error")
         };
 
-        Ok(Rc::new(value))
+        Ok(value)
     }
 
-    fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> Result<Rc<Value>, Exception> {
-        if let List(ref list) = *self.evaluate(variable)? {
-            if let Int(index) = *self.evaluate(member)? {
+    fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> Result<Value, Exception> {
+        if let List(ref list) = self.evaluate(variable)? {
+            if let Int(index) = self.evaluate(member)? {
                 match list.get(index) {
                     Ok(value) => Ok(value),
                     Err(message) => err(operator.line, message)
@@ -204,16 +204,15 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
         }
     }
 
-    fn visit_grouping(&mut self, expr: &Box<Expr>) -> Result<Rc<Value>, Exception> {
+    fn visit_grouping(&mut self, expr: &Box<Expr>) -> Result<Value, Exception> {
         self.evaluate(expr)
     }
 
-    fn visit_literal(&mut self, value: &Rc<Value>) -> Result<Rc<Value>, Exception> {
-        // optimize this so it doesn't need copying
+    fn visit_literal(&mut self, value: &Value) -> Result<Value, Exception> {
         Ok(value.clone())
     }
 
-    fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> Result<Rc<Value>, Exception> {
+    fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> Result<Value, Exception> {
         let mut list = VecList::new();
 
         for expr in exprs {
@@ -221,27 +220,27 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
             list.push(value);
         }
 
-        Ok(Rc::new(Value::List(Rc::new(list))))
+        Ok(Value::List(Rc::new(list)))
     }
 
-    fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> Result<Rc<Value>, Exception> {
-        let value = &*self.evaluate(expr)?;
+    fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> Result<Value, Exception> {
+        let value = self.evaluate(expr)?;
 
         let value = match operator.token_type {
             BANG    => Bool(!value.is_truthy()),
             MINUS   => match value {
-                        &Int(value) => Value::Int(-value),
-                        &Float(value) => Value::Float(-value),
+                        Int(value) => Value::Int(-value),
+                        Float(value) => Value::Float(-value),
                         _ => return err(operator.line, "Invalid value type for operator -")
                     },
             _       => return err(operator.line, "Operator error")
         };
 
-        Ok(Rc::new(value))
+        Ok(value)
     }
 
-    fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> Result<Rc<Value>, Exception> {
-        let cond_value = &*self.evaluate(condition)?;
+    fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> Result<Value, Exception> {
+        let cond_value = self.evaluate(condition)?;
 
         if cond_value.is_truthy() {
             self.evaluate(true_branch)
@@ -250,7 +249,7 @@ impl ExprVisitor<Result<Rc<Value>, Exception>> for Interpreter {
         }
     }
 
-    fn visit_variable(&mut self, name: &Token) -> Result<Rc<Value>, Exception> {
+    fn visit_variable(&mut self, name: &Token) -> Result<Value, Exception> {
         self.env.get(name)
     }
 }
@@ -261,6 +260,6 @@ fn order_value (line: i32, left_val: &Value, right_val: &Value) -> Result<i32, E
     })
 }
 
-fn err(line : i32, message : &str) -> Result<Rc<Value>, Exception> {
+fn err(line : i32, message : &str) -> Result<Value, Exception> {
     Err(RuntimeErr(line, String::from(message)))
 }

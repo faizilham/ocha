@@ -1,12 +1,12 @@
-use std::rc::Rc;
 use std::collections::HashMap;
+
 use exception::Exception;
 use exception::Exception::RuntimeErr;
 use token::Token;
 use value::Value;
 
 pub struct Environment {
-    symbols: HashMap<String, Rc<Value>>
+    symbols: HashMap<String, Value>
 }
 
 impl Environment {
@@ -26,13 +26,13 @@ impl Environment {
         }
     }
 
-    pub fn put(&mut self, name: &Token, value: Rc<Value>) {
+    pub fn put(&mut self, name: &Token, value: Value) {
         self.symbols.insert(name.lexeme.clone(), value);
     }
 
-    pub fn get(&mut self, name: &Token) -> Result<Rc<Value>, Exception> {
-        if let Some(ref val) = self.symbols.get(&name.lexeme) {
-            Ok((*val).clone())
+    pub fn get(&mut self, name: &Token) -> Result<Value, Exception> {
+        if let Some(ref value) = self.symbols.get(&name.lexeme) {
+            Ok((*value).clone())
         } else {
             Err(declare_err(name))
         }

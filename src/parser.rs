@@ -1,9 +1,7 @@
-use exception::Exception;
-use exception::Exception::ParseErr;
-use std::rc::Rc;
 use ast::expr::Expr;
 use ast::stmt::Stmt;
-
+use exception::Exception;
+use exception::Exception::ParseErr;
 use token::{TokenType, Token};
 use token::TokenType::*;
 use value::Value;
@@ -57,7 +55,7 @@ fn var_declaration(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let expr = if parser.matches(EQUAL) {
         expression(parser)?
     } else {
-        Box::new(Expr::Literal { value: Rc::new(Value::Nil) })
+        Box::new(Expr::Literal { value: Value::Nil })
     };
 
     parser.expect(SEMICOLON, "Expect ';' after variable declaration")?;
@@ -234,7 +232,7 @@ fn call(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
 fn primary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
     let token = parser.advance().unwrap();
     let expr = match token.token_type {
-        NUMBER | NIL | TRUE | FALSE | STRING => Expr::Literal { value: Rc::new(token.literal) },
+        NUMBER | NIL | TRUE | FALSE | STRING => Expr::Literal { value: token.literal },
         IDENTIFIER => Expr::Variable{name: token},
         LEFT_SQUARE => return list_init(parser),
         LEFT_PAREN => return grouping(parser),

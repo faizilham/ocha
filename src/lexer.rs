@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use exception::Exception;
 use exception::Exception::ParseErr;
 use token::{Token, TokenType};
@@ -108,7 +110,7 @@ fn string(lexer : &mut LexerState) -> Result<Token, Exception>{
         return Err(lexer.error("Expect '\"' after string"));
     }
 
-    lexer.create_literal(STRING, Value::Str(value))
+    lexer.create_literal(STRING, Value::Str(Rc::new(value)))
 }
 
 fn number(lexer : &mut LexerState) -> Result<Token, Exception>{

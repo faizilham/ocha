@@ -1,9 +1,8 @@
-use std::rc::Rc;
 use value::Value;
 
 #[derive(Debug)]
 pub struct VecList {
-    values: Vec<Rc<Value>>
+    values: Vec<Value>
 }
 
 impl VecList {
@@ -11,11 +10,11 @@ impl VecList {
         VecList {values: Vec::new()}
     }
 
-    pub fn push(&mut self, value: Rc<Value>){
+    pub fn push(&mut self, value: Value){
         self.values.push(value);
     }
 
-    pub fn get(&self, index: i64) -> Result<Rc<Value>, &'static str> {
+    pub fn get(&self, index: i64) -> Result<Value, &'static str> {
         if let Some(ref value) = self.values.get(index as usize) {
             Ok((*value).clone())
         } else {
@@ -23,7 +22,7 @@ impl VecList {
         }
     }
 
-    pub fn put(&mut self, index: i64, value: Rc<Value>) -> Result<(), &'static str>{
+    pub fn put(&mut self, index: i64, value: Value) -> Result<(), &'static str>{
         if index >= 0 && (index as usize) < self.values.len() {
             let index = index as usize;
             self.values.remove(index);

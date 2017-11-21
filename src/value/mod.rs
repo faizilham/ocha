@@ -8,7 +8,7 @@ pub enum Value {
     Int(i64),
     Float(f64),
     Bool(bool),
-    Str(String),
+    Str(Rc<String>),
     List(Rc<VecList>),
     Nil
 }
@@ -40,7 +40,7 @@ impl Value {
             &Int(ref i) => format!("{}", i),
             &Float(ref f) => format!("{}", f),
             &Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
-            &Str(ref s) => s.clone(),
+            &Str(ref s) => (**s).clone(),
             &List(_) => String::from("[List]"),
             &Nil => String::from("nil")
         }
@@ -53,7 +53,7 @@ impl PartialEq for Value {
             (&Int(ref a), &Int(ref b)) => a == b,
             (&Float(ref a), &Float(ref b)) => a == b,
             (&Bool(ref a), &Bool(ref b)) => a == b,
-            (&Str(ref a), &Str(ref b)) => a == b,
+            (&Str(ref a), &Str(ref b)) => *a == *b,
             (&List(ref a), &List(ref b)) => Rc::ptr_eq(a, b),
             (&Nil, &Nil) => true,
             (_, _) => false
