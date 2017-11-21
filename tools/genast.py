@@ -26,6 +26,7 @@ AST = {
             "Expression -> expr: Box<Expr>",
             "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>",
+            "Set        -> get_expr: Box<Expr>, expr: Box<Expr>",
             "VarDecl    -> name: Token, expr: Box<Expr>",
             "While      -> condition: Box<Expr>, body: Box<Stmt>",   
         ]

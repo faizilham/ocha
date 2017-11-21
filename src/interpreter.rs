@@ -106,6 +106,32 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
         Ok(())
     }
 
+    fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> Result<(), Exception> {
+        if let Expr::Get {ref variable, ref operator, ref member } = **get_expr {
+            if let List(ref list) = self.evaluate(variable)? {
+                if let Int(index) = self.evaluate(member)? {
+                    let value = self.evaluate(expr)?;
+
+                    // TODO fix list mutability 
+                    Ok(())
+                    // let mut list = list
+
+                    // match list.put(index, value) {
+                    //     Ok(_) => Ok(()),
+                    //     Err(message) => err_stmt(operator.line, message)
+                    // }
+                } else {
+                    err_stmt(operator.line, "Invalid member type for get operator")
+                }
+            } else {
+                err_stmt(operator.line, "Invalid container type for get operator")
+            }
+        } else {
+            // it should not get here
+            err_stmt(0, "Set statement error")
+        }
+    }
+
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> Result<(), Exception>{
         let value = self.evaluate(expr)?;
         self.env.put(name, value);
@@ -262,4 +288,8 @@ fn order_value (line: i32, left_val: &Value, right_val: &Value) -> Result<i32, E
 
 fn err(line : i32, message : &str) -> Result<Value, Exception> {
     Err(RuntimeErr(line, String::from(message)))
+}
+
+fn err_stmt(line: i32, message: &str) -> Result<(), Exception> {
+    Err(RuntimeErr(line, String::from(message)))    
 }

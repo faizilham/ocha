@@ -115,13 +115,13 @@ fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
 }
 
 fn assignment(parser: &mut ParserState, variable: Box<Expr>) -> Result<Box<Stmt>, Exception> {
-    if let Expr::Variable{ name } = *variable {
-        let expr = expression(parser)?;
-        parser.expect(SEMICOLON, "Expect ';' after expression")?;
+    let expr = expression(parser)?;
+    parser.expect(SEMICOLON, "Expect ';' after expression")?;
 
-        Ok(Box::new(Stmt::Assignment{name, expr}))
-    } else {
-        Err(parser.exception("Invalid assignment target"))
+    match *variable {
+        Expr::Variable{ name } => Ok(Box::new(Stmt::Assignment{name, expr})),
+        Expr::Get {..} => Ok(Box::new(Stmt::Set{get_expr: variable, expr})),
+        _ => Err(parser.exception("Invalid assignment target"))
     }
 }
 
