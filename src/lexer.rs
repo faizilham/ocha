@@ -1,10 +1,8 @@
-use std::rc::Rc;
-
 use exception::Exception;
 use exception::Exception::ParseErr;
 use token::{Token, TokenType};
 use token::TokenType::*;
-use value::Value;
+use token::Literal;
 
 pub fn scan(source_string : String) -> Result<Vec<Token>, ()> {
     let mut tokens = Vec::new();
@@ -93,7 +91,7 @@ fn scan_token(lexer : &mut LexerState) -> Result<Token, Exception>{
         return Ok(token);
     }
 
-    Ok(Token::new(EOF, String::new(), Value::Nil, lexer.line))
+    Ok(Token::new(EOF, String::new(), Literal::Nil, lexer.line))
 }
 
 fn string(lexer : &mut LexerState) -> Result<Token, Exception>{
@@ -118,7 +116,7 @@ fn string(lexer : &mut LexerState) -> Result<Token, Exception>{
         return Err(lexer.error("Expect '\"' after string"));
     }
 
-    lexer.create_literal(STRING, Value::Str(Rc::new(value)))
+    lexer.create_literal(STRING, Literal::Str(value))
 }
 
 fn number(lexer : &mut LexerState) -> Result<Token, Exception>{
@@ -142,10 +140,10 @@ fn number(lexer : &mut LexerState) -> Result<Token, Exception>{
 
     if is_integer {
         let value : i64 = value.parse().unwrap();
-        lexer.create_literal(NUMBER, Value::Int(value))
+        lexer.create_literal(NUMBER, Literal::Int(value))
     } else {
         let value : f64 = value.parse().unwrap();
-        lexer.create_literal(NUMBER, Value::Float(value))
+        lexer.create_literal(NUMBER, Literal::Float(value))
     }
 }
 
@@ -159,8 +157,8 @@ fn identifier(lexer : &mut LexerState) -> Result<Token, Exception>{
     let token_type = find_keywords(&lexeme).unwrap_or(IDENTIFIER);
 
     match token_type {
-        TRUE => lexer.create_literal(TRUE, Value::Bool(true)),
-        FALSE => lexer.create_literal(FALSE, Value::Bool(false)),
+        TRUE => lexer.create_literal(TRUE, Literal::Bool(true)),
+        FALSE => lexer.create_literal(FALSE, Literal::Bool(false)),
         _ => lexer.create_token(token_type)
     }
 }
@@ -265,10 +263,10 @@ impl LexerState {
     fn create_token(&self, token_type: TokenType) -> Result<Token, Exception> {
         let lexeme = self.get_current_lexeme();
 
-        Ok(Token::new(token_type, lexeme, Value::Nil, self.line))
+        Ok(Token::new(token_type, lexeme, Literal::Nil, self.line))
     }
 
-    fn create_literal(&self, token_type: TokenType, literal: Value) -> Result<Token, Exception> {
+    fn create_literal(&self, token_type: TokenType, literal: Literal) -> Result<Token, Exception> {
         let lexeme = self.get_current_lexeme();
 
         Ok(Token::new(token_type, lexeme, literal, self.line))

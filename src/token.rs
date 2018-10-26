@@ -1,5 +1,3 @@
-use value::Value;
-
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
@@ -31,15 +29,24 @@ pub enum TokenType {
 }
 
 #[derive(Debug)]
+pub enum Literal {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    Str(String),
+    Nil
+}
+
+#[derive(Debug)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
-    pub literal: Value,
+    pub literal: Literal,
     pub line: i32
 }
 
 impl Token {
-    pub fn new (token_type: TokenType, lexeme: String, literal: Value, line: i32) -> Token {
+    pub fn new (token_type: TokenType, lexeme: String, literal: Literal, line: i32) -> Token {
         Token {token_type, lexeme, literal, line}
     }
 }

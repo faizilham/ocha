@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::rc::Weak;
 
 pub mod list;
 use self::list::VecList;
@@ -8,19 +9,27 @@ pub enum Value {
     Int(i64),
     Float(f64),
     Bool(bool),
-    Str(Rc<String>),
-    List(Rc<VecList>),
+    Str(Weak<String>),
+    List(Weak<VecList>),
     Nil
 }
 
 use self::Value::*;
+
+pub fn unbox<T> (reference: &Weak<T>) -> Rc<T> {
+    reference.upgrade().unwrap()
+}
 
 impl Value {
     pub fn ordering (&self, other: &Value) -> Result<i32, &'static str> {
         let order = match (self, other) {
             (&Int(ref a), &Int(ref b)) => if a > b { 1 } else if a < b { -1 } else { 0 },
             (&Float(ref a), &Float(ref b)) => if a > b { 1 } else if a < b { -1 } else { 0 },
-            (&Str(ref a), &Str(ref b)) => if a > b { 1 } else if a < b { -1 } else { 0 },
+            (&Str(ref a), &Str(ref b)) => {
+                let ra = unbox(a);
+                let rb = unbox(b);
+                if ra > rb { 1 } else if ra < rb { -1 } else { 0 }
+            },
             (_, _) => return Err("Invalid type for partial ordering")
         };
 
@@ -40,7 +49,7 @@ impl Value {
             &Int(ref i) => format!("{}", i),
             &Float(ref f) => format!("{}", f),
             &Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
-            &Str(ref s) => (**s).clone(),
+            &Str(ref s) => (*unbox(s)).clone(),
             &List(_) => String::from("[List]"),
             &Nil => String::from("nil")
         }
@@ -53,8 +62,8 @@ impl PartialEq for Value {
             (&Int(ref a), &Int(ref b)) => a == b,
             (&Float(ref a), &Float(ref b)) => a == b,
             (&Bool(ref a), &Bool(ref b)) => a == b,
-            (&Str(ref a), &Str(ref b)) => *a == *b,
-            (&List(ref a), &List(ref b)) => Rc::ptr_eq(a, b),
+            (&Str(ref a), &Str(ref b)) => unbox(a) == unbox(b),
+            (&List(ref a), &List(ref b)) => Rc::ptr_eq(&unbox(a), &unbox(b)),
             (&Nil, &Nil) => true,
             (_, _) => false
         }

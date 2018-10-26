@@ -1,12 +1,12 @@
 use token::Token;
-use value::Value;
+use token::Literal;
 
 #[derive(Debug)]
 pub enum Expr {
     Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
     Get { variable: Box<Expr>, operator: Token, member: Box<Expr> },
     Grouping { expr: Box<Expr> },
-    Literal { value: Value },
+    Literal { value: Literal },
     ListInit { exprs: Vec<Box<Expr>> },
     Unary { operator: Token, expr: Box<Expr> },
     Ternary { condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr> },
@@ -17,7 +17,7 @@ pub trait ExprVisitor<T> {
     fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> T;
     fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> T;
     fn visit_grouping(&mut self, expr: &Box<Expr>) -> T;
-    fn visit_literal(&mut self, value: &Value) -> T;
+    fn visit_literal(&mut self, value: &Literal) -> T;
     fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> T;
     fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> T;
     fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> T;

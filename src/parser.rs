@@ -4,7 +4,7 @@ use exception::Exception;
 use exception::Exception::ParseErr;
 use token::{TokenType, Token};
 use token::TokenType::*;
-use value::Value;
+use token::Literal;
 
 // use EOF as padding
 static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
@@ -51,11 +51,11 @@ fn declaration(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
 
 fn var_declaration(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let name = parser.expect(IDENTIFIER, "Expect identifier name")?;
-    
+
     let expr = if parser.matches(EQUAL) {
         expression(parser)?
     } else {
-        Box::new(Expr::Literal { value: Value::Nil })
+        Box::new(Expr::Literal { value: Literal::Nil })
     };
 
     parser.expect(SEMICOLON, "Expect ';' after variable declaration")?;
@@ -131,7 +131,7 @@ fn if_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     parser.expect(RIGHT_PAREN, "Expect ')' after condition")?;
 
     let true_branch = statement(parser)?;
-    
+
     let false_branch = if parser.matches(ELSE) {
         Some(statement(parser)?)
     } else {
@@ -149,7 +149,7 @@ fn while_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     parser.loop_level += 1;
     let body = statement(parser)?;
     parser.loop_level -= 1;
-    Ok(Box::new(Stmt::While { condition, body }))    
+    Ok(Box::new(Stmt::While { condition, body }))
 }
 
 fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {

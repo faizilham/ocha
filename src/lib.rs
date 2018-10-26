@@ -2,6 +2,7 @@ mod ast;
 // mod astprinter;
 mod environment;
 mod exception;
+mod heap;
 mod interpreter;
 mod lexer;
 mod parser;
@@ -32,7 +33,7 @@ fn read_file (filename : &String) -> Result<String, ()> {
 
         if let Ok(_) = file.read_to_string(&mut buffer) {
             return Ok(buffer)
-        } 
+        }
     }
 
     print_error(&format!("File '{}' not found", filename));

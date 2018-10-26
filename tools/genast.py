@@ -3,13 +3,13 @@ output_dir = "src/ast"
 
 AST = {
     "Expr": (
-        [ "token::Token", "value::Value"],
+        [ "token::Token", "token::Literal"],
         [
-            
+
             "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
             "Get        -> variable: Box<Expr>, operator: Token, member: Box<Expr>",
             "Grouping   -> expr: Box<Expr>",
-            "Literal    -> value: Value",
+            "Literal    -> value: Literal",
             "ListInit   -> exprs: Vec<Box<Expr>>",
             "Unary      -> operator: Token, expr: Box<Expr>",
             "Ternary    -> condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr>",
@@ -28,7 +28,7 @@ AST = {
             "Print      -> exprs: Vec<Box<Expr>>",
             "Set        -> get_expr: Box<Expr>, expr: Box<Expr>",
             "VarDecl    -> name: Token, expr: Box<Expr>",
-            "While      -> condition: Box<Expr>, body: Box<Stmt>",   
+            "While      -> condition: Box<Expr>, body: Box<Stmt>",
         ]
     )
 }
@@ -76,7 +76,7 @@ def parse_types(type_data):
             fields.append((name.strip(), datatype.strip()))
 
         types.append((classname, fields))
-    
+
     return types
 
 def define_ast(basename, imports, type_data):
@@ -89,7 +89,7 @@ def define_ast(basename, imports, type_data):
         if len(imports) > 0: writer.writeln()
 
         types = parse_types(type_data)
-            
+
         # AST Enum
         writer.writeln("#[derive(Debug)]")
         writer.start_block("pub enum {}".format(basename))
@@ -104,13 +104,13 @@ def define_ast(basename, imports, type_data):
 
         # Visitor Trait
         writer.start_block("pub trait {}Visitor<T>".format(basename))
-        
+
         for (classname, fields) in types:
             items = ", ".join(['{}: &{}'.format(*field) for field in fields])
             params = "(&mut self, )"
 
             writer.writeln("fn visit_{}(&mut self, {}) -> T;".format(classname.lower(), items))
-        
+
         writer.end_block()
         writer.writeln()
 
@@ -122,7 +122,7 @@ def define_ast(basename, imports, type_data):
         for (classname, fields) in types:
             left_param = ", ".join(['ref {}'.format(fieldname) for (fieldname, _) in fields])
             right_param = ", ".join([fieldname for (fieldname, _) in fields])
-            
+
             writer.writeln("{0}::{1}{{{2}}} => visitor.visit_{3}({4}),".format(basename, classname, left_param, classname.lower(), right_param))
         writer.end_block()
         writer.end_block()

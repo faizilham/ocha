@@ -6,19 +6,23 @@ use environment::Environment;
 use exception::Exception;
 use exception::Exception::RuntimeErr;
 use exception::Exception::BreakException;
+use heap::Heap;
 use token::Token;
 use token::TokenType::*;
+use token::Literal;
 use value::Value;
 use value::Value::*;
 use value::list::VecList;
+use value::unbox;
 
 pub struct Interpreter {
-    env: Environment
+    env: Environment,
+    heap: Heap
 }
 
 impl Interpreter {
     pub fn new() -> Interpreter {
-        Interpreter{env: Environment::new()}
+        Interpreter{ env: Environment::new(), heap: Heap::new() }
     }
 
     // pub fn interpret_expr(&mut self, expr: &Box<Expr>){
@@ -112,7 +116,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
                 if let Int(index) = self.evaluate(member)? {
                     let value = self.evaluate(expr)?;
 
-                    match list.put(index, value) {
+                    match unbox(list).put(index, value) {
                         Ok(_) => Ok(()),
                         Err(message) => err_stmt(operator.line, message)
                     }
@@ -199,8 +203,8 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
                                 (Float(ref a), Float(ref b))    => Float(a - b),
                                 (Int(ref a), Float(ref b))      => Float((*a as f64) + b),
                                 (Float(ref a), Int(ref b))      => Float(a + (*b as f64)),
-                                (Str(ref a), ref b)              => Str( Rc::new(format!("{}{}", a, b.to_string())) ),
-                                (ref a, Str(ref b))              => Str( Rc::new(format!("{}{}", a.to_string(), b)) ),
+                                (Str(ref a), ref b)             => self.heap.allocate_str(format!("{}{}", unbox(a), b.to_string())),
+                                (ref a, Str(ref b))             => self.heap.allocate_str(format!("{}{}", a.to_string(), unbox(b))),
 
                                 (_, _) => return err(line, "Invalid type for operator +")
                             },
@@ -214,7 +218,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
     fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> Result<Value, Exception> {
         if let List(ref list) = self.evaluate(variable)? {
             if let Int(index) = self.evaluate(member)? {
-                match list.get(index) {
+                match unbox(list).get(index) {
                     Ok(value) => Ok(value),
                     Err(message) => err(operator.line, message)
                 }
@@ -230,8 +234,16 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
         self.evaluate(expr)
     }
 
-    fn visit_literal(&mut self, value: &Value) -> Result<Value, Exception> {
-        Ok(value.clone())
+    fn visit_literal(&mut self, value: &Literal) -> Result<Value, Exception> {
+        let val = match value {
+            Literal::Nil => Nil,
+            Literal::Int(i) => Int(*i),
+            Literal::Float(f) => Float(*f),
+            Literal::Bool(b) => Bool(*b),
+            Literal::Str(s) => self.heap.allocate_str(s.clone()),
+        };
+
+        Ok(val)
     }
 
     fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> Result<Value, Exception> {
@@ -242,7 +254,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
             list.push(value);
         }
 
-        Ok(Value::List(Rc::new(list)))
+        Ok(self.heap.allocate_list(list))
     }
 
     fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> Result<Value, Exception> {
