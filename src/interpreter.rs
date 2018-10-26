@@ -56,7 +56,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
 
         let value = self.evaluate(expr)?;
         self.env.put(name, value);
-        
+
         Ok(())
     }
 
@@ -112,14 +112,10 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
                 if let Int(index) = self.evaluate(member)? {
                     let value = self.evaluate(expr)?;
 
-                    // TODO fix list mutability 
-                    Ok(())
-                    // let mut list = list
-
-                    // match list.put(index, value) {
-                    //     Ok(_) => Ok(()),
-                    //     Err(message) => err_stmt(operator.line, message)
-                    // }
+                    match list.put(index, value) {
+                        Ok(_) => Ok(()),
+                        Err(message) => err_stmt(operator.line, message)
+                    }
                 } else {
                     err_stmt(operator.line, "Invalid member type for get operator")
                 }
@@ -169,7 +165,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
             GREATER_EQUAL   => Bool( order_value(line, &left_val, &right_val)? >= 0 ),
             LESS            => Bool( order_value(line, &left_val, &right_val)? < 0 ),
             LESS_EQUAL      => Bool( order_value(line, &left_val, &right_val)? <= 0 ),
-            
+
             STAR            => match (left_val, right_val) {
                                 (Int(ref a), Int(ref b))        => Int(a * b),
                                 (Float(ref a), Float(ref b))    => Float(a * b),
@@ -194,7 +190,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
                                 (Float(ref a), Int(ref b))      => Float(a / (*b as f64)),
                                 (Int(_), Int(0))                => return err(line, "Division by zero"),
                                 (Int(ref a), Int(ref b))        => Int(a / b),
-                                
+
                                 (_, _) => return err(line, "Invalid type for operator /")
                             },
 
@@ -221,7 +217,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
                 match list.get(index) {
                     Ok(value) => Ok(value),
                     Err(message) => err(operator.line, message)
-                }                
+                }
             } else {
                 err(operator.line, "Invalid member type for get operator")
             }
@@ -239,7 +235,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
     }
 
     fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> Result<Value, Exception> {
-        let mut list = VecList::new();
+        let list = VecList::new();
 
         for expr in exprs {
             let value = self.evaluate(expr)?;
@@ -271,7 +267,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
         if cond_value.is_truthy() {
             self.evaluate(true_branch)
         } else {
-            self.evaluate(false_branch)    
+            self.evaluate(false_branch)
         }
     }
 
@@ -291,5 +287,5 @@ fn err(line : i32, message : &str) -> Result<Value, Exception> {
 }
 
 fn err_stmt(line: i32, message: &str) -> Result<(), Exception> {
-    Err(RuntimeErr(line, String::from(message)))    
+    Err(RuntimeErr(line, String::from(message)))
 }
