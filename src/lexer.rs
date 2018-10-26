@@ -12,77 +12,88 @@ pub fn scan(source_string : String) -> Result<Vec<Token>, ()> {
     let mut has_error = false;
 
     while !lexer.at_end() {
-        lexer.start = lexer.current;
-        if let Err(exception) = scan_token(&mut lexer, &mut tokens) {
-            exception.print();
-            has_error = true;
+        match scan_token(&mut lexer) {
+            Ok(token) => tokens.push(token),
+            Err(exception) => {
+                exception.print();
+                has_error = true;
+            }
         }
     }
 
     if !has_error {
-        tokens.push(Token::new(EOF, String::new(), Value::Nil, lexer.line));
         Ok(tokens)
     } else {
         Err(())
     }
 }
 
-fn scan_token(lexer : &mut LexerState, tokens : &mut Vec<Token>) -> Result<(), Exception>{
-    let c = lexer.advance();
+fn scan_token(lexer : &mut LexerState) -> Result<Token, Exception>{
+    while !lexer.at_end() {
+        lexer.start = lexer.current;
+        let c = lexer.advance();
+        let token = match c {
+            // delimiters
+            ';' =>  lexer.create_token(SEMICOLON),
+            ',' =>  lexer.create_token(COMMA),
+            '.' =>  lexer.create_token(DOT),
 
-    let token = match c {
-        // delimiters
-        ';' =>  lexer.create_token(SEMICOLON),
-        ',' =>  lexer.create_token(COMMA),
-        '.' =>  lexer.create_token(DOT),
+            // parentheses
+            '(' =>  lexer.create_token(LEFT_PAREN),
+            ')' =>  lexer.create_token(RIGHT_PAREN),
+            '{' =>  lexer.create_token(LEFT_BRACE),
+            '}' =>  lexer.create_token(RIGHT_BRACE),
+            '[' =>  lexer.create_token(LEFT_SQUARE),
+            ']' =>  lexer.create_token(RIGHT_SQUARE),
 
-        // parentheses
-        '(' =>  lexer.create_token(LEFT_PAREN),
-        ')' =>  lexer.create_token(RIGHT_PAREN),
-        '{' =>  lexer.create_token(LEFT_BRACE),
-        '}' =>  lexer.create_token(RIGHT_BRACE),
-        '[' =>  lexer.create_token(LEFT_SQUARE),
-        ']' =>  lexer.create_token(RIGHT_SQUARE),
+            // logics & arithmatics
+            '!' =>  if lexer.matches('=') { lexer.create_token(BANG_EQUAL) }
+                    else { lexer.create_token(BANG) },
+            '=' =>  if lexer.matches('=') { lexer.create_token(EQUAL_EQUAL) }
+                    else { lexer.create_token(EQUAL) },
+            '>' =>  if lexer.matches('=') { lexer.create_token(GREATER_EQUAL) }
+                    else { lexer.create_token(GREATER) },
+            '<' =>  if lexer.matches('=') { lexer.create_token(LESS_EQUAL) }
+                    else { lexer.create_token(LESS) },
 
-        // logics & arithmatics
-        '!' =>  if lexer.matches('=') { lexer.create_token(BANG_EQUAL) }
-                else { lexer.create_token(BANG) },
-        '=' =>  if lexer.matches('=') { lexer.create_token(EQUAL_EQUAL) }
-                else { lexer.create_token(EQUAL) },
-        '>' =>  if lexer.matches('=') { lexer.create_token(GREATER_EQUAL) }
-                else { lexer.create_token(GREATER) },
-        '<' =>  if lexer.matches('=') { lexer.create_token(LESS_EQUAL) }
-                else { lexer.create_token(LESS) },
+            '?' =>  lexer.create_token(QUESTION),
+            ':' =>  lexer.create_token(COLON),
 
-        '?' =>  lexer.create_token(QUESTION),
-        ':' =>  lexer.create_token(COLON),
+            '+' =>  lexer.create_token(PLUS),
+            '-' =>  lexer.create_token(MINUS),
+            '*' =>  lexer.create_token(STAR),
 
-        '+' =>  lexer.create_token(PLUS),
-        '-' =>  lexer.create_token(MINUS),
-        '*' =>  lexer.create_token(STAR),
+            // slash or comments
+            '/' =>  if lexer.matches('/') {
+                        consume_line_comment(lexer);
+                        continue;
+                    } else if lexer.matches('*') {
+                        consume_multiline_comment(lexer)?;
+                        continue;
+                    } else {
+                        lexer.create_token(SLASH)
+                    },
 
-        '/' =>  if lexer.matches('/') {
-                    return consume_line_comment(lexer);
-                } else if lexer.matches('*') {
-                    return consume_multiline_comment(lexer);
-                } else {
-                    lexer.create_token(SLASH)
-                },
+            // string
+            '"' =>  string(lexer),
 
-        '"' =>  string(lexer),
-        _   =>  if is_numeric(c) {
-                    number(lexer)
-                } else if is_id_start(c) {
-                    identifier(lexer)
-                } else if is_whitespace(c) {
-                    return consume_whitespace(lexer);
-                } else {
-                    return Err(lexer.error(&format!("Unexpected token {}", c)));
-                }
-    }?;
+            // other
+            _   =>  if is_numeric(c) {
+                        number(lexer)
+                    } else if is_id_start(c) {
+                        identifier(lexer)
+                    } else if is_whitespace(c) {
+                        consume_whitespace(lexer);
+                        continue;
+                    } else {
+                        return Err(lexer.error(&format!("Unexpected token {}", c)));
+                    }
+        }?;
 
-    tokens.push(token);
-    Ok(())
+        return Ok(token);
+    }
+
+    Ok(Token::new(EOF, String::new(), Value::Nil, lexer.line))
 }
 
 fn string(lexer : &mut LexerState) -> Result<Token, Exception>{
@@ -154,13 +165,11 @@ fn identifier(lexer : &mut LexerState) -> Result<Token, Exception>{
     }
 }
 
-fn consume_line_comment(lexer : &mut LexerState) -> Result<(), Exception> {
+fn consume_line_comment(lexer : &mut LexerState) {
     while !lexer.matches('\n') { // comments
         lexer.advance();
     };
     lexer.line += 1;
-
-    Ok(())
 }
 
 fn consume_multiline_comment(lexer : &mut LexerState) -> Result<(), Exception> {
@@ -182,7 +191,7 @@ fn consume_multiline_comment(lexer : &mut LexerState) -> Result<(), Exception> {
     Err(lexer.error("Expect '*/' at the end of multiline comment"))
 }
 
-fn consume_whitespace(lexer : &mut LexerState) -> Result<(), Exception> {
+fn consume_whitespace(lexer : &mut LexerState) {
     if lexer.previous() == '\n' {
         lexer.line += 1;
     }
@@ -192,8 +201,6 @@ fn consume_whitespace(lexer : &mut LexerState) -> Result<(), Exception> {
             lexer.line += 1;
         }
     }
-
-    Ok(())
 }
 
 struct LexerState {
