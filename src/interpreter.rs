@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use ast::expr::{Expr, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
 use environment::Environment;
@@ -7,6 +5,7 @@ use exception::Exception;
 use exception::Exception::RuntimeErr;
 use exception::Exception::BreakException;
 use heap::Heap;
+use heap::Object;
 use token::Token;
 use token::TokenType::*;
 use token::Literal;
@@ -112,20 +111,22 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
 
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> Result<(), Exception> {
         if let Expr::Get {ref variable, ref operator, ref member } = **get_expr {
-            if let List(ref list) = self.evaluate(variable)? {
-                if let Int(index) = self.evaluate(member)? {
-                    let value = self.evaluate(expr)?;
+            if let Obj(ref o) = self.evaluate(variable)? {
+                if let Object::List(ref list) = unbox(o).borrow() {
+                    if let Int(index) = self.evaluate(member)? {
+                        let value = self.evaluate(expr)?;
 
-                    match unbox(list).put(index, value) {
-                        Ok(_) => Ok(()),
-                        Err(message) => err_stmt(operator.line, message)
+                        match list.put(index, value) {
+                            Ok(_) => return Ok(()),
+                            Err(message) => return err_stmt(operator.line, message)
+                        }
+                    } else {
+                        return err_stmt(operator.line, "Invalid member type for get operator")
                     }
-                } else {
-                    err_stmt(operator.line, "Invalid member type for get operator")
                 }
-            } else {
-                err_stmt(operator.line, "Invalid container type for get operator")
             }
+
+            err_stmt(operator.line, "Invalid container type for get operator")
         } else {
             // it should not get here
             err_stmt(0, "Set statement error")
@@ -199,14 +200,31 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
                             },
 
             PLUS            => match (left_val, right_val) {
+                                // math addition
                                 (Int(ref a), Int(ref b))        => Int(a + b),
                                 (Float(ref a), Float(ref b))    => Float(a - b),
                                 (Int(ref a), Float(ref b))      => Float((*a as f64) + b),
                                 (Float(ref a), Int(ref b))      => Float(a + (*b as f64)),
-                                (Str(ref a), ref b)             => self.heap.allocate_str(format!("{}{}", unbox(a), b.to_string())),
-                                (ref a, Str(ref b))             => self.heap.allocate_str(format!("{}{}", a.to_string(), unbox(b))),
 
-                                (_, _) => return err(line, "Invalid type for operator +")
+                                // string addition
+                                (Obj(ref a), ref b) => {
+                                    if let Object::Str(s) = unbox(a).borrow() {
+                                        self.heap.allocate_str(format!("{}{}", s, b.to_string()))
+                                    } else {
+                                        return err(line, "Invalid type for operator +")
+                                    }
+                                },
+
+                                (ref a, Obj(ref b)) => {
+                                    if let Object::Str(s) = unbox(b).borrow() {
+                                        self.heap.allocate_str(format!("{}{}", a.to_string(), s))
+                                    } else {
+                                        return err(line, "Invalid type for operator +")
+                                    }
+                                },
+
+                                (_, _) => return err(line, "Invalid type for operator +"),
+
                             },
 
             _ => return err(line, "Operator error")
@@ -216,18 +234,21 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
     }
 
     fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> Result<Value, Exception> {
-        if let List(ref list) = self.evaluate(variable)? {
-            if let Int(index) = self.evaluate(member)? {
-                match unbox(list).get(index) {
-                    Ok(value) => Ok(value),
-                    Err(message) => err(operator.line, message)
+
+        if let Obj(ref o) = self.evaluate(variable)? {
+            if let Object::List(ref list) = unbox(o).borrow() {
+                if let Int(index) = self.evaluate(member)? {
+                    match list.get(index) {
+                        Ok(value) => return Ok(value),
+                        Err(message) => return err(operator.line, message)
+                    }
+                } else {
+                    return err(operator.line, "Invalid member type for get operator")
                 }
-            } else {
-                err(operator.line, "Invalid member type for get operator")
             }
-        } else {
-            err(operator.line, "Invalid container type for get operator")
         }
+
+        err(operator.line, "Invalid container type for get operator")
     }
 
     fn visit_grouping(&mut self, expr: &Box<Expr>) -> Result<Value, Exception> {
