@@ -44,7 +44,7 @@ fn scan_token(lexer : &mut LexerState, tokens : &mut Vec<Token>) -> Result<(), E
         '[' =>  lexer.create_token(LEFT_SQUARE),
         ']' =>  lexer.create_token(RIGHT_SQUARE),
 
-        // logics & arithmatics 
+        // logics & arithmatics
         '!' =>  if lexer.matches('=') { lexer.create_token(BANG_EQUAL) }
                 else { lexer.create_token(BANG) },
         '=' =>  if lexer.matches('=') { lexer.create_token(EQUAL_EQUAL) }
@@ -96,14 +96,11 @@ fn string(lexer : &mut LexerState) -> Result<Token, Exception>{
             (false, '"') => break,
             (false, '\\') => escape_backslash = true,
             (false, c) => value.push(c),
-            (true, c) => if let Some(decoded) = decode(c) {
-                            value.push(decoded);
-                            escape_backslash = false;
-                        } else {
-                            value.push(c);
-                            escape_backslash = false;
-                        }
-        };        
+            (true, c) => {
+                value.push(decode(c));
+                escape_backslash = false;
+            }
+        };
     }
 
     if lexer.previous() != '"' {
@@ -260,7 +257,7 @@ impl LexerState {
 
     fn create_token(&self, token_type: TokenType) -> Result<Token, Exception> {
         let lexeme = self.get_current_lexeme();
-        
+
         Ok(Token::new(token_type, lexeme, Value::Nil, self.line))
     }
 
@@ -282,22 +279,20 @@ impl LexerState {
         self.source.iter()
             .skip(start)
             .take(end - start)
-            .clone()            
+            .clone()
             .collect()
     }
 }
 
-fn decode(code: char) -> Option<char> {
-    let decoded = match code {
+fn decode(code: char) -> char {
+    match code {
         '\"' => '\"',
         '\\' => '\\',
         'n' => '\n',
         'r' => '\r',
         't' => '\t',
-        _ => return None
-    };
-
-    Some(decoded)
+        _ => code
+    }
 }
 
 fn find_keywords(lexeme : &str) -> Option<TokenType>{

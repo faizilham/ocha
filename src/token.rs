@@ -13,7 +13,7 @@ pub enum TokenType {
     // Arithmetics and Logics
     PLUS, MINUS, STAR, SLASH,
     AND, OR, QUESTION, COLON,
-    BANG, BANG_EQUAL, 
+    BANG, BANG_EQUAL,
     EQUAL, EQUAL_EQUAL,
     GREATER, GREATER_EQUAL,
     LESS, LESS_EQUAL,
@@ -35,7 +35,7 @@ pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
     pub literal: Value,
-    pub line: i32    
+    pub line: i32
 }
 
 impl Token {
