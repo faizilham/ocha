@@ -63,6 +63,16 @@ impl Value {
             &Nil => String::from("nil")
         }
     }
+
+    pub fn is_string(&self) -> bool {
+        if let Obj(o) = self {
+            if let Object::Str(_) = unbox(o).borrow() {
+                return true
+            }
+        }
+
+        false
+    }
 }
 
 impl PartialEq for Value {

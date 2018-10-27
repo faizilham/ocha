@@ -210,23 +210,31 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
                                 (Float(ref a), Int(ref b))      => Float(a + (*b as f64)),
 
                                 // string addition
-                                (Obj(ref a), ref b) => {
-                                    if let Object::Str(s) = unbox(a).borrow() {
-                                        self.heap.allocate_str(format!("{}{}", s, b.to_string()))
+                                (ref a, ref b) => {
+                                    if a.is_string() || b.is_string() {
+                                        let s = format!("{}{}", a.to_string(), b.to_string());
+                                        self.heap.allocate_str(s)
                                     } else {
                                         return err(line, "Invalid type for operator +")
                                     }
-                                },
+                                }
+                                // (Obj(ref a), ref b) => {
+                                //     if let Object::Str(s) = unbox(a).borrow() {
+                                //         self.heap.allocate_str(format!("{}{}", s, b.to_string()))
+                                //     } else {
+                                //         return err(line, "Invalid type for operator +")
+                                //     }
+                                // },
 
-                                (ref a, Obj(ref b)) => {
-                                    if let Object::Str(s) = unbox(b).borrow() {
-                                        self.heap.allocate_str(format!("{}{}", a.to_string(), s))
-                                    } else {
-                                        return err(line, "Invalid type for operator +")
-                                    }
-                                },
+                                // (ref a, Obj(ref b)) => {
+                                //     if let Object::Str(s) = unbox(b).borrow() {
+                                //         self.heap.allocate_str(format!("{}{}", a.to_string(), s))
+                                //     } else {
+                                //         return err(line, "Invalid type for operator +")
+                                //     }
+                                // },
 
-                                (_, _) => return err(line, "Invalid type for operator +"),
+                                // (_, _) => return err(line, "Invalid type for operator +"),
 
                             },
 
