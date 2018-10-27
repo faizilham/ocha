@@ -37,10 +37,13 @@ impl Interpreter {
         for statement in statements {
             if let Err(exception) = self.execute(&statement) {
                 exception.print();
+
+                self.heap.sweep();
                 return Err(());
             }
         }
 
+        self.heap.sweep();
         Ok(())
     }
 
