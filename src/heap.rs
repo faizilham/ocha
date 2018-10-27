@@ -5,34 +5,9 @@ use value::Value;
 use value::list::VecList;
 
 #[derive(Debug)]
-pub enum Object {
+enum Object {
     Str(String),
     List(VecList),
-}
-
-impl Object {
-    pub fn to_string(&self) -> String {
-        match self {
-            Object::Str(ref s) => s.clone(),
-            Object::List(_) => String::from("[list]")
-        }
-    }
-
-    pub fn get_string<'a> (&'a self) -> Option<&'a String> {
-        if let Object::Str(ref s) = self {
-            Some(s)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_list<'a> (&'a self) -> Option<&'a VecList> {
-        if let Object::List(ref list) = self {
-            Some(list)
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -42,24 +17,37 @@ pub struct HeapObj {
 }
 
 impl HeapObj {
-    pub fn borrow(&self) -> &Object {
-        &self.obj
-    }
-
-    pub fn borrow_mut(&mut self) -> &mut Object {
-        &mut self.obj
-    }
-
-    pub fn to_string(&self) -> String {
-        self.obj.to_string()
-    }
-
+    // gc related
     pub fn mark(&self, marked: bool) {
         self.marked.set(marked);
     }
 
     pub fn untraceable(&self) -> bool {
         !self.marked.get()
+    }
+
+    // object related
+    pub fn to_string(&self) -> String {
+        match self.obj {
+            Object::Str(ref s) => s.clone(),
+            Object::List(_) => String::from("[list]")
+        }
+    }
+
+    pub fn get_string<'a> (&'a self) -> Option<&'a String> {
+        if let Object::Str(ref s) = self.obj {
+            Some(s)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_list<'a> (&'a self) -> Option<&'a VecList> {
+        if let Object::List(ref list) = self.obj {
+            Some(list)
+        } else {
+            None
+        }
     }
 }
 

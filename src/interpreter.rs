@@ -5,7 +5,6 @@ use exception::Exception;
 use exception::Exception::RuntimeErr;
 use exception::Exception::BreakException;
 use heap::Heap;
-use heap::Object;
 use token::Token;
 use token::TokenType::*;
 use token::Literal;
@@ -115,7 +114,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> Result<(), Exception> {
         if let Expr::Get {ref variable, ref operator, ref member } = **get_expr {
             if let Obj(ref o) = self.evaluate(variable)? {
-                if let Object::List(ref list) = unbox(o).borrow() {
+                if let Some(ref list) = unbox(o).get_list() {
                     if let Int(index) = self.evaluate(member)? {
                         let value = self.evaluate(expr)?;
 
@@ -218,24 +217,6 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
                                         return err(line, "Invalid type for operator +")
                                     }
                                 }
-                                // (Obj(ref a), ref b) => {
-                                //     if let Object::Str(s) = unbox(a).borrow() {
-                                //         self.heap.allocate_str(format!("{}{}", s, b.to_string()))
-                                //     } else {
-                                //         return err(line, "Invalid type for operator +")
-                                //     }
-                                // },
-
-                                // (ref a, Obj(ref b)) => {
-                                //     if let Object::Str(s) = unbox(b).borrow() {
-                                //         self.heap.allocate_str(format!("{}{}", a.to_string(), s))
-                                //     } else {
-                                //         return err(line, "Invalid type for operator +")
-                                //     }
-                                // },
-
-                                // (_, _) => return err(line, "Invalid type for operator +"),
-
                             },
 
             _ => return err(line, "Operator error")
@@ -247,7 +228,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
     fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> Result<Value, Exception> {
 
         if let Obj(ref o) = self.evaluate(variable)? {
-            if let Object::List(ref list) = unbox(o).borrow() {
+            if let Some(ref list) = unbox(o).get_list() {
                 if let Int(index) = self.evaluate(member)? {
                     match list.get(index) {
                         Ok(value) => return Ok(value),

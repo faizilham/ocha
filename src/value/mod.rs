@@ -2,7 +2,6 @@ use std::rc::Rc;
 use std::rc::Weak;
 
 use super::heap::HeapObj;
-use super::heap::Object;
 
 pub mod list;
 
@@ -32,10 +31,7 @@ impl Value {
             },
 
             (&Obj(ref a), &Obj(ref b)) => {
-                let oa = unbox(a);
-                let ob = unbox(b);
-
-                if let (&Object::Str(ref sa), &Object::Str(ref sb)) = (oa.borrow(), ob.borrow()) {
+                if let (Some(ref sa), Some(ref sb)) = (unbox(a).get_string(), unbox(b).get_string()) {
                     Ok(if sa > sb { 1 } else if sa < sb { -1 } else { 0 })
                 } else {
                     Err("Invalid type for partial ordering")
@@ -66,7 +62,7 @@ impl Value {
 
     pub fn is_string(&self) -> bool {
         if let Obj(o) = self {
-            if let Object::Str(_) = unbox(o).borrow() {
+            if let Some(_) = unbox(o).get_string() {
                 return true
             }
         }
@@ -85,7 +81,7 @@ impl PartialEq for Value {
                 let oa = unbox(a);
                 let ob = unbox(b);
 
-                if let (&Object::Str(ref sa), &Object::Str(ref sb)) = (oa.borrow(), ob.borrow()) {
+                if let (Some(ref sa), Some(ref sb)) = (oa.get_string(), ob.get_string()) {
                     sa == sb
                 } else {
                     Rc::ptr_eq(&oa, &ob)
