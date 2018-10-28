@@ -31,8 +31,8 @@ impl Value {
             },
 
             (&Str(ref a), &Str(ref b)) => {
-                let a = a.get();
-                let b = b.get();
+                let a = a.get_ref();
+                let b = b.get_ref();
 
                 let sa = a.raw();
                 let sb = b.raw();
@@ -58,7 +58,7 @@ impl Value {
             &Int(ref i) => format!("{}", i),
             &Float(ref f) => format!("{}", f),
             &Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
-            &Str(ref s) => s.get().to_string(),
+            &Str(ref s) => s.get_ref().to_string(),
             &List(_) => String::from("[list]")
         }
     }
@@ -71,7 +71,7 @@ impl PartialEq for Value {
             (&Float(ref a), &Float(ref b)) => a == b,
             (&Bool(ref a), &Bool(ref b)) => a == b,
             (&Str(ref a), &Str(ref b)) => {
-                a.get().raw() == b.get().raw()
+                a.get_ref().raw() == b.get_ref().raw()
             },
 
             (&List(ref a), &List(ref b)) => {
