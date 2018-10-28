@@ -11,9 +11,9 @@ pub trait Traceable {
 }
 
 #[derive(Debug)]
-pub struct HeapPtr<T>(Weak<T>);
+pub struct HeapPtr<T : Traceable>(Weak<T>);
 
-impl<T> HeapPtr<T> {
+impl<T : Traceable> HeapPtr<T> {
     pub fn new(rf: Rc<T>) -> HeapPtr<T> {
         HeapPtr(Rc::downgrade(&rf))
     }
@@ -27,13 +27,13 @@ impl<T> HeapPtr<T> {
     }
 }
 
-impl<T> PartialEq for HeapPtr<T> {
+impl<T : Traceable> PartialEq for HeapPtr<T> {
     fn eq(&self, other: &HeapPtr<T>) -> bool {
         Rc::ptr_eq(&self.get_ref(), &other.get_ref())
     }
 }
 
-impl<T> Clone for HeapPtr<T> {
+impl<T : Traceable> Clone for HeapPtr<T> {
     fn clone(&self) -> HeapPtr<T> {
         HeapPtr(self.0.clone())
     }
