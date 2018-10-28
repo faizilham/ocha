@@ -48,20 +48,20 @@ impl Heap {
         Heap { objs: Vec::new() }
     }
 
-    pub fn allocate_str(&mut self, s: String) -> Value {
-        let obj = OchaStr::new(s);
-
+    fn allocate<T : Traceable + 'static>(&mut self, obj: T) -> HeapPtr<T> {
         let rf = Rc::new(obj);
         self.objs.push(rf.clone());
 
-        Value::Str(HeapPtr::new(rf))
+        HeapPtr::new(rf)
+    }
+
+    pub fn allocate_str(&mut self, string: String) -> Value {
+        let ochastr = OchaStr::new(string);
+        Value::Str(self.allocate(ochastr))
     }
 
     pub fn allocate_list(&mut self, list: VecList) -> Value {
-        let rf = Rc::new(list);
-        self.objs.push(rf.clone());
-
-        Value::List(HeapPtr::new(rf))
+        Value::List(self.allocate(list))
     }
 
     pub fn sweep(&mut self) {
