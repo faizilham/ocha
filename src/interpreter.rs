@@ -86,7 +86,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
 
         if cond_value.is_truthy() {
             self.execute(true_branch)?;
-        } else if let &Some(ref else_branch) = false_branch {
+        } else if let Some(else_branch) = false_branch {
             self.execute(else_branch)?;
         }
 
@@ -111,7 +111,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
     }
 
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> Result<(), Exception> {
-        if let Expr::Get {ref variable, ref operator, ref member } = **get_expr {
+        if let Expr::Get {variable, operator, member } = get_expr.as_ref() {
             if let List(lref) = self.evaluate(variable)? {
                 if let Int(index) = self.evaluate(member)? {
                     let value = self.evaluate(expr)?;

@@ -26,15 +26,15 @@ pub trait ExprVisitor<T> {
 
 impl Expr {
     pub fn accept<T, Visitor: ExprVisitor<T>>(expr: &Box<Expr>, visitor: &mut Visitor) -> T {
-        match **expr {
-            Expr::Binary{ref left, ref operator, ref right} => visitor.visit_binary(left, operator, right),
-            Expr::Get{ref variable, ref operator, ref member} => visitor.visit_get(variable, operator, member),
-            Expr::Grouping{ref expr} => visitor.visit_grouping(expr),
-            Expr::Literal{ref value} => visitor.visit_literal(value),
-            Expr::ListInit{ref exprs} => visitor.visit_listinit(exprs),
-            Expr::Unary{ref operator, ref expr} => visitor.visit_unary(operator, expr),
-            Expr::Ternary{ref condition, ref true_branch, ref false_branch} => visitor.visit_ternary(condition, true_branch, false_branch),
-            Expr::Variable{ref name} => visitor.visit_variable(name),
+        match expr.as_ref() {
+            Expr::Binary{left, operator, right} => visitor.visit_binary(left, operator, right),
+            Expr::Get{variable, operator, member} => visitor.visit_get(variable, operator, member),
+            Expr::Grouping{expr} => visitor.visit_grouping(expr),
+            Expr::Literal{value} => visitor.visit_literal(value),
+            Expr::ListInit{exprs} => visitor.visit_listinit(exprs),
+            Expr::Unary{operator, expr} => visitor.visit_unary(operator, expr),
+            Expr::Ternary{condition, true_branch, false_branch} => visitor.visit_ternary(condition, true_branch, false_branch),
+            Expr::Variable{name} => visitor.visit_variable(name),
         }
     }
 }

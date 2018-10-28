@@ -28,16 +28,16 @@ pub trait StmtVisitor<T> {
 
 impl Stmt {
     pub fn accept<T, Visitor: StmtVisitor<T>>(stmt: &Box<Stmt>, visitor: &mut Visitor) -> T {
-        match **stmt {
-            Stmt::Assignment{ref name, ref expr} => visitor.visit_assignment(name, expr),
-            Stmt::Block{ref body} => visitor.visit_block(body),
-            Stmt::Break{ref token} => visitor.visit_break(token),
-            Stmt::Expression{ref expr} => visitor.visit_expression(expr),
-            Stmt::If{ref condition, ref true_branch, ref false_branch} => visitor.visit_if(condition, true_branch, false_branch),
-            Stmt::Print{ref exprs} => visitor.visit_print(exprs),
-            Stmt::Set{ref get_expr, ref expr} => visitor.visit_set(get_expr, expr),
-            Stmt::VarDecl{ref name, ref expr} => visitor.visit_vardecl(name, expr),
-            Stmt::While{ref condition, ref body} => visitor.visit_while(condition, body),
+        match stmt.as_ref() {
+            Stmt::Assignment{name, expr} => visitor.visit_assignment(name, expr),
+            Stmt::Block{body} => visitor.visit_block(body),
+            Stmt::Break{token} => visitor.visit_break(token),
+            Stmt::Expression{expr} => visitor.visit_expression(expr),
+            Stmt::If{condition, true_branch, false_branch} => visitor.visit_if(condition, true_branch, false_branch),
+            Stmt::Print{exprs} => visitor.visit_print(exprs),
+            Stmt::Set{get_expr, expr} => visitor.visit_set(get_expr, expr),
+            Stmt::VarDecl{name, expr} => visitor.visit_vardecl(name, expr),
+            Stmt::While{condition, body} => visitor.visit_while(condition, body),
         }
     }
 }

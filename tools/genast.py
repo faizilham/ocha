@@ -117,10 +117,10 @@ def define_ast(basename, imports, type_data):
         # Accept function
         writer.start_block("impl {}".format(basename))
         writer.start_block("pub fn accept<T, Visitor: {0}Visitor<T>>({1}: &Box<{0}>, visitor: &mut Visitor) -> T".format(basename, basename.lower()))
-        writer.start_block("match **{}".format(basename.lower()))
+        writer.start_block("match {}.as_ref()".format(basename.lower()))
 
         for (classname, fields) in types:
-            left_param = ", ".join(['ref {}'.format(fieldname) for (fieldname, _) in fields])
+            left_param = ", ".join(['{}'.format(fieldname) for (fieldname, _) in fields])
             right_param = ", ".join([fieldname for (fieldname, _) in fields])
 
             writer.writeln("{0}::{1}{{{2}}} => visitor.visit_{3}({4}),".format(basename, classname, left_param, classname.lower(), right_param))
