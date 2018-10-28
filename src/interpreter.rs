@@ -10,7 +10,7 @@ use token::TokenType::*;
 use token::Literal;
 use value::Value;
 use value::Value::*;
-use value::list::VecList;
+use value::VecList;
 
 pub struct Interpreter {
     env: Environment,

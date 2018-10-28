@@ -2,8 +2,8 @@ use std::rc::Rc;
 use std::rc::Weak;
 
 use value::Value;
-use value::list::VecList;
-use value::ocha_str::OchaStr;
+use value::VecList;
+use value::OchaStr;
 
 pub trait Traceable {
     fn mark(&self, marked: bool);
