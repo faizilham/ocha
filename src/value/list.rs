@@ -1,14 +1,18 @@
-use value::Value;
+use std::cell::Cell;
 use std::cell::RefCell;
+
+use value::Value;
+use heap::Traceable;
 
 #[derive(Debug)]
 pub struct VecList {
+    marked: Cell<bool>,
     values: RefCell<Vec<Value>>
 }
 
 impl VecList {
     pub fn new () -> VecList {
-        VecList {values: RefCell::new(Vec::new())}
+        VecList {marked: Cell::new(false), values: RefCell::new(Vec::new())}
     }
 
     pub fn push(&self, value: Value){
@@ -34,5 +38,15 @@ impl VecList {
         } else {
             Err("Index out of bound")
         }
+    }
+}
+
+impl Traceable for VecList {
+    fn mark(&self, marked: bool) {
+        self.marked.set(marked);
+    }
+
+    fn is_traced(&self) -> bool {
+        self.marked.get()
     }
 }

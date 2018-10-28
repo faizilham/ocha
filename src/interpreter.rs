@@ -113,18 +113,17 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
 
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> Result<(), Exception> {
         if let Expr::Get {ref variable, ref operator, ref member } = **get_expr {
-            if let Obj(ref o) = self.evaluate(variable)? {
-                if let Some(ref list) = unbox(o).get_list() {
-                    if let Int(index) = self.evaluate(member)? {
-                        let value = self.evaluate(expr)?;
+            if let List(ref lref) = self.evaluate(variable)? {
+                if let Int(index) = self.evaluate(member)? {
+                    let value = self.evaluate(expr)?;
+                    let list = unbox(lref);
 
-                        match list.put(index, value) {
-                            Ok(_) => return Ok(()),
-                            Err(message) => return err_stmt(operator.line, message)
-                        }
-                    } else {
-                        return err_stmt(operator.line, "Invalid member type for get operator")
+                    match list.put(index, value) {
+                        Ok(_) => return Ok(()),
+                        Err(message) => return err_stmt(operator.line, message)
                     }
+                } else {
+                    return err_stmt(operator.line, "Invalid member type for get operator")
                 }
             }
 
@@ -210,7 +209,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
 
                                 // string addition
                                 (ref a, ref b) => {
-                                    if a.is_string() || b.is_string() {
+                                    if is_string(a) || is_string(b) {
                                         let s = format!("{}{}", a.to_string(), b.to_string());
                                         self.heap.allocate_str(s)
                                     } else {
@@ -227,16 +226,15 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
 
     fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> Result<Value, Exception> {
 
-        if let Obj(ref o) = self.evaluate(variable)? {
-            if let Some(ref list) = unbox(o).get_list() {
-                if let Int(index) = self.evaluate(member)? {
-                    match list.get(index) {
-                        Ok(value) => return Ok(value),
-                        Err(message) => return err(operator.line, message)
-                    }
-                } else {
-                    return err(operator.line, "Invalid member type for get operator")
+        if let List(ref lref) = self.evaluate(variable)? {
+            if let Int(index) = self.evaluate(member)? {
+                let list = unbox(lref);
+                match list.get(index) {
+                    Ok(value) => return Ok(value),
+                    Err(message) => return err(operator.line, message)
                 }
+            } else {
+                return err(operator.line, "Invalid member type for get operator")
             }
         }
 
@@ -305,6 +303,14 @@ fn order_value (line: i32, left_val: &Value, right_val: &Value) -> Result<i32, E
     left_val.ordering(right_val).map_err(|message| {
         RuntimeErr(line, String::from(message))
     })
+}
+
+fn is_string(value: &Value) -> bool {
+    if let Str(_) = value {
+        true
+    } else {
+        false
+    }
 }
 
 fn err(line : i32, message : &str) -> Result<Value, Exception> {

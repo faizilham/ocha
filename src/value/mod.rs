@@ -1,17 +1,22 @@
 use std::rc::Rc;
 use std::rc::Weak;
 
-use super::heap::HeapObj;
-
+pub mod ocha_str;
 pub mod list;
+
+use self::ocha_str::OchaStr;
+use self::list::VecList;
 
 #[derive(Debug)]
 pub enum Value {
+    Nil,
     Int(i64),
     Float(f64),
     Bool(bool),
-    Obj(Weak<HeapObj>),
-    Nil
+
+    // heap objects
+    Str(Weak<OchaStr>),
+    List(Weak<VecList>),
 }
 
 use self::Value::*;
@@ -30,12 +35,14 @@ impl Value {
                 Ok(if a > b { 1 } else if a < b { -1 } else { 0 })
             },
 
-            (&Obj(ref a), &Obj(ref b)) => {
-                if let (Some(ref sa), Some(ref sb)) = (unbox(a).get_string(), unbox(b).get_string()) {
-                    Ok(if sa > sb { 1 } else if sa < sb { -1 } else { 0 })
-                } else {
-                    Err("Invalid type for partial ordering")
-                }
+            (&Str(ref a), &Str(ref b)) => {
+                let a = unbox(a);
+                let b = unbox(b);
+
+                let sa = a.raw();
+                let sb = b.raw();
+
+                Ok(if sa > sb { 1 } else if sa < sb { -1 } else { 0 })
             },
 
             (_, _) => Err("Invalid type for partial ordering")
@@ -52,22 +59,13 @@ impl Value {
 
     pub fn to_string(&self) -> String {
         match self {
+            &Nil => String::from("nil"),
             &Int(ref i) => format!("{}", i),
             &Float(ref f) => format!("{}", f),
             &Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
-            &Obj(ref o) => unbox(o).to_string(),
-            &Nil => String::from("nil")
+            &Str(ref s) => unbox(s).to_string(),
+            &List(_) => String::from("[list]")
         }
-    }
-
-    pub fn is_string(&self) -> bool {
-        if let Obj(o) = self {
-            if let Some(_) = unbox(o).get_string() {
-                return true
-            }
-        }
-
-        false
     }
 }
 
@@ -77,16 +75,13 @@ impl PartialEq for Value {
             (&Int(ref a), &Int(ref b)) => a == b,
             (&Float(ref a), &Float(ref b)) => a == b,
             (&Bool(ref a), &Bool(ref b)) => a == b,
-            (&Obj(ref a), &Obj(ref b)) => {
-                let oa = unbox(a);
-                let ob = unbox(b);
-
-                if let (Some(ref sa), Some(ref sb)) = (oa.get_string(), ob.get_string()) {
-                    sa == sb
-                } else {
-                    Rc::ptr_eq(&oa, &ob)
-                }
+            (&Str(ref a), &Str(ref b)) => {
+                unbox(a).raw() == unbox(b).raw()
             },
+
+            (&List(ref a), &List(ref b)) => {
+                Rc::ptr_eq(&unbox(a), &unbox(b))
+            }
 
             (&Nil, &Nil) => true,
             (_, _) => false
@@ -100,7 +95,8 @@ impl Clone for Value {
             &Int(ref i) => Int(*i),
             &Float(ref f) => Float(*f),
             &Bool(ref b) => Bool(*b),
-            &Obj(ref o) => Obj(o.clone()),
+            &Str(ref r) => Str(r.clone()),
+            &List(ref r) => List(r.clone()),
             &Nil => Nil
         }
     }
