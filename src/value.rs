@@ -1,6 +1,8 @@
-use heap::HeapPtr;
+use std::rc::Rc;
 use std::cell::Cell;
 use std::cell::RefCell;
+
+use heap::HeapPtr;
 use heap::Traceable;
 
 /*** Value Declaration ***/
@@ -19,6 +21,14 @@ pub enum Value {
 }
 
 use self::Value::*;
+
+fn get_traceable(value: &Value) -> Option<Rc<Traceable>> {
+    match value {
+        Str(s) => Some(s.get_ref()),
+        List(l) => Some(l.get_ref()),
+        _ => None
+    }
+}
 
 impl Value {
     pub fn ordering (&self, other: &Value) -> Result<i32, &'static str> {
@@ -103,20 +113,20 @@ impl Clone for Value {
 /// Garbage-collected string object
 #[derive(Debug)]
 pub struct OchaStr {
-    marked: Cell<bool>,
+    traced: Cell<bool>,
     string: String
 }
 
 impl OchaStr {
     pub fn new (string: String) -> OchaStr {
-        OchaStr { marked: Cell::new(false), string }
+        OchaStr { traced: Cell::new(false), string }
     }
 
     pub fn to_string(&self) -> String {
         self.string.clone()
     }
 
-    pub fn raw<'a>(&'a self) -> &'a String {
+    pub fn raw (&self) -> &String {
         &self.string
     }
 }
@@ -128,12 +138,16 @@ impl PartialEq for OchaStr {
 }
 
 impl Traceable for OchaStr {
-    fn mark(&self, marked: bool) {
-        self.marked.set(marked);
+    fn trace(&self) {
+        self.traced.set(true);
+    }
+
+    fn reset_trace(&self) {
+        self.traced.set(false);
     }
 
     fn is_traced(&self) -> bool {
-        self.marked.get()
+        self.traced.get()
     }
 }
 
@@ -142,13 +156,13 @@ impl Traceable for OchaStr {
 /// Garbage-collected list object
 #[derive(Debug)]
 pub struct VecList {
-    marked: Cell<bool>,
+    traced: Cell<bool>,
     values: RefCell<Vec<Value>>
 }
 
 impl VecList {
     pub fn new () -> VecList {
-        VecList {marked: Cell::new(false), values: RefCell::new(Vec::new())}
+        VecList { traced: Cell::new(false), values: RefCell::new(Vec::new()) }
     }
 
     pub fn push(&self, value: Value){
@@ -178,11 +192,25 @@ impl VecList {
 }
 
 impl Traceable for VecList {
-    fn mark(&self, marked: bool) {
-        self.marked.set(marked);
+    fn trace(&self) {
+        if self.is_traced() {
+            return;
+        }
+
+        self.traced.set(true);
+
+        for val in self.values.borrow().iter() {
+            if let Some(traceable) = get_traceable(val) {
+                traceable.trace()
+            }
+        }
+    }
+
+    fn reset_trace(&self) {
+        self.traced.set(false);
     }
 
     fn is_traced(&self) -> bool {
-        self.marked.get()
+        self.traced.get()
     }
 }

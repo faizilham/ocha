@@ -6,7 +6,8 @@ use value::VecList;
 use value::OchaStr;
 
 pub trait Traceable {
-    fn mark(&self, marked: bool);
+    fn trace(&self);
+    fn reset_trace(&self);
     fn is_traced(&self) -> bool;
 }
 
@@ -68,7 +69,7 @@ impl Heap {
         let mut i = 0;
         while i < self.objs.len() {
             if self.objs[i].is_traced() {
-                self.objs[i].mark(false);
+                self.objs[i].reset_trace();
                 i += 1;
             } else {
                 self.objs.remove(i);
