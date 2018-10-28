@@ -11,7 +11,6 @@ use token::Literal;
 use value::Value;
 use value::Value::*;
 use value::list::VecList;
-use value::unbox;
 
 pub struct Interpreter {
     env: Environment,
@@ -116,7 +115,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
             if let List(ref lref) = self.evaluate(variable)? {
                 if let Int(index) = self.evaluate(member)? {
                     let value = self.evaluate(expr)?;
-                    let list = unbox(lref);
+                    let list = lref.get_ref();
 
                     match list.put(index, value) {
                         Ok(_) => return Ok(()),
@@ -228,7 +227,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
 
         if let List(ref lref) = self.evaluate(variable)? {
             if let Int(index) = self.evaluate(member)? {
-                let list = unbox(lref);
+                let list = lref.get_ref();
                 match list.get(index) {
                     Ok(value) => return Ok(value),
                     Err(message) => return err(operator.line, message)

@@ -1,11 +1,10 @@
-use std::rc::Rc;
-use std::rc::Weak;
-
 pub mod ocha_str;
 pub mod list;
 
 use self::ocha_str::OchaStr;
 use self::list::VecList;
+
+use heap::HeapPtr;
 
 #[derive(Debug)]
 pub enum Value {
@@ -15,15 +14,11 @@ pub enum Value {
     Bool(bool),
 
     // heap objects
-    Str(Weak<OchaStr>),
-    List(Weak<VecList>),
+    Str(HeapPtr<OchaStr>),
+    List(HeapPtr<VecList>),
 }
 
 use self::Value::*;
-
-pub fn unbox<T> (reference: &Weak<T>) -> Rc<T> {
-    reference.upgrade().unwrap()
-}
 
 impl Value {
     pub fn ordering (&self, other: &Value) -> Result<i32, &'static str> {
@@ -36,8 +31,8 @@ impl Value {
             },
 
             (&Str(ref a), &Str(ref b)) => {
-                let a = unbox(a);
-                let b = unbox(b);
+                let a = a.get();
+                let b = b.get();
 
                 let sa = a.raw();
                 let sb = b.raw();
@@ -63,7 +58,7 @@ impl Value {
             &Int(ref i) => format!("{}", i),
             &Float(ref f) => format!("{}", f),
             &Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
-            &Str(ref s) => unbox(s).to_string(),
+            &Str(ref s) => s.get().to_string(),
             &List(_) => String::from("[list]")
         }
     }
@@ -76,11 +71,11 @@ impl PartialEq for Value {
             (&Float(ref a), &Float(ref b)) => a == b,
             (&Bool(ref a), &Bool(ref b)) => a == b,
             (&Str(ref a), &Str(ref b)) => {
-                unbox(a).raw() == unbox(b).raw()
+                a.get().raw() == b.get().raw()
             },
 
             (&List(ref a), &List(ref b)) => {
-                Rc::ptr_eq(&unbox(a), &unbox(b))
+                a == b
             }
 
             (&Nil, &Nil) => true,
