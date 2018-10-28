@@ -86,7 +86,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
 
         if cond_value.is_truthy() {
             self.execute(true_branch)?;
-        } else if let &Some(ref else_branch) = false_branch {
+        } else if let Some(else_branch) = false_branch {
             self.execute(else_branch)?;
         }
 

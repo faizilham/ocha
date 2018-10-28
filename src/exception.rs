@@ -9,8 +9,8 @@ use self::Exception::*;
 impl Exception {
     pub fn print(&self) {
         match self {
-            &ParseErr(ref line, ref message) => report_error(*line, message),
-            &RuntimeErr(ref line, ref message) => report_error(*line, message),
+            ParseErr(line, message) => report_error(*line, message),
+            RuntimeErr(line, message) => report_error(*line, message),
             _ => ()
         };
     }

@@ -30,7 +30,7 @@ impl Value {
                 Ok(if a > b { 1 } else if a < b { -1 } else { 0 })
             },
 
-            (&Str(ref a), &Str(ref b)) => {
+            (Str(a), Str(b)) => {
                 let a = a.get_ref();
                 let b = b.get_ref();
 
@@ -46,20 +46,20 @@ impl Value {
 
     pub fn is_truthy(&self) -> bool {
         match self {
-            &Bool(ref b) => *b,
-            &Nil => false,
+            &Bool(b) => b,
+            Nil => false,
             _ => true
         }
     }
 
     pub fn to_string(&self) -> String {
         match self {
-            &Nil => String::from("nil"),
-            &Int(ref i) => format!("{}", i),
-            &Float(ref f) => format!("{}", f),
-            &Bool(ref b) => String::from( if *b {"true"} else {"false"} ),
-            &Str(ref s) => s.get_ref().to_string(),
-            &List(_) => String::from("[list]")
+            Nil => String::from("nil"),
+            Int(i) => format!("{}", i),
+            Float(f) => format!("{}", f),
+            Bool(b) => String::from( if *b {"true"} else {"false"} ),
+            Str(s) => s.get_ref().to_string(),
+            List(_) => String::from("[list]")
         }
     }
 }
@@ -67,18 +67,18 @@ impl Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Value) -> bool {
         match (self, other) {
-            (&Int(ref a), &Int(ref b)) => a == b,
-            (&Float(ref a), &Float(ref b)) => a == b,
-            (&Bool(ref a), &Bool(ref b)) => a == b,
-            (&Str(ref a), &Str(ref b)) => {
+            (&Int(a), &Int(b)) => a == b,
+            (&Float(a), &Float(b)) => a == b,
+            (&Bool(a), &Bool(b)) => a == b,
+            (Str(a), Str(b)) => {
                 a.get_ref().raw() == b.get_ref().raw()
             },
 
-            (&List(ref a), &List(ref b)) => {
+            (List(a), List(b)) => {
                 a == b
             }
 
-            (&Nil, &Nil) => true,
+            (Nil, Nil) => true,
             (_, _) => false
         }
     }
@@ -87,12 +87,12 @@ impl PartialEq for Value {
 impl Clone for Value {
     fn clone(&self) -> Value {
         match self {
-            &Int(ref i) => Int(*i),
-            &Float(ref f) => Float(*f),
-            &Bool(ref b) => Bool(*b),
-            &Str(ref r) => Str(r.clone()),
-            &List(ref r) => List(r.clone()),
-            &Nil => Nil
+            &Int(i) => Int(i),
+            &Float(f) => Float(f),
+            &Bool(b) => Bool(b),
+            Str(r) => Str(r.clone()),
+            List(r) => List(r.clone()),
+            Nil => Nil
         }
     }
 }
