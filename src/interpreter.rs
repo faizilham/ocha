@@ -112,7 +112,7 @@ impl StmtVisitor<Result<(), Exception>> for Interpreter {
 
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> Result<(), Exception> {
         if let Expr::Get {ref variable, ref operator, ref member } = **get_expr {
-            if let List(ref lref) = self.evaluate(variable)? {
+            if let List(lref) = self.evaluate(variable)? {
                 if let Int(index) = self.evaluate(member)? {
                     let value = self.evaluate(expr)?;
                     let list = lref.get_ref();
@@ -172,43 +172,47 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
             LESS_EQUAL      => Bool( order_value(line, &left_val, &right_val)? <= 0 ),
 
             STAR            => match (left_val, right_val) {
-                                (Int(ref a), Int(ref b))        => Int(a * b),
-                                (Float(ref a), Float(ref b))    => Float(a * b),
-                                (Int(ref a), Float(ref b))      => Float((*a as f64) * b),
-                                (Float(ref a), Int(ref b))      => Float(a * (*b as f64)),
+                                (Int(a), Int(b))        => Int(a * b),
+                                (Float(a), Float(b))    => Float(a * b),
+                                (Int(a), Float(b))      => Float((a as f64) * b),
+                                (Float(a), Int(b))      => Float(a * (b as f64)),
 
                                 (_, _) => return err(line, "Invalid type for operator *")
                             },
 
             MINUS           => match (left_val, right_val) {
-                                (Int(ref a), Int(ref b))        => Int(a - b),
-                                (Float(ref a), Float(ref b))    => Float(a - b),
-                                (Int(ref a), Float(ref b))      => Float((*a as f64) - b),
-                                (Float(ref a), Int(ref b))      => Float(a - (*b as f64)),
+                                (Int(a), Int(b))        => Int(a - b),
+                                (Float(a), Float(b))    => Float(a - b),
+                                (Int(a), Float(b))      => Float((a as f64) - b),
+                                (Float(a), Int(b))      => Float(a - (b as f64)),
 
                                 (_, _) => return err(line, "Invalid type for operator -")
                             },
 
             SLASH           => match (left_val, right_val) {
-                                (Float(ref a), Float(ref b))    => Float(a / b),
-                                (Int(ref a), Float(ref b))      => Float((*a as f64) / b),
-                                (Float(ref a), Int(ref b))      => Float(a / (*b as f64)),
-                                (Int(_), Int(0))                => return err(line, "Division by zero"),
-                                (Int(ref a), Int(ref b))        => Int(a / b),
+                                (Float(a), Float(b))    => Float(a / b),
+                                (Int(a), Float(b))      => Float((a as f64) / b),
+                                (Float(a), Int(b))      => Float(a / (b as f64)),
+                                (Int(a), Int(b))        => {
+                                    if b == 0 {
+                                        return err(line, "Division by zero")
+                                    }
+                                    Int(a / b)
+                                },
 
                                 (_, _) => return err(line, "Invalid type for operator /")
                             },
 
             PLUS            => match (left_val, right_val) {
                                 // math addition
-                                (Int(ref a), Int(ref b))        => Int(a + b),
-                                (Float(ref a), Float(ref b))    => Float(a - b),
-                                (Int(ref a), Float(ref b))      => Float((*a as f64) + b),
-                                (Float(ref a), Int(ref b))      => Float(a + (*b as f64)),
+                                (Int(a), Int(b))        => Int(a + b),
+                                (Float(a), Float(b))    => Float(a - b),
+                                (Int(a), Float(b))      => Float((a as f64) + b),
+                                (Float(a), Int(b))      => Float(a + (b as f64)),
 
                                 // string addition
-                                (ref a, ref b) => {
-                                    if is_string(a) || is_string(b) {
+                                (a, b) => {
+                                    if is_string(&a) || is_string(&b) {
                                         let s = format!("{}{}", a.to_string(), b.to_string());
                                         self.heap.allocate_str(s)
                                     } else {
@@ -225,7 +229,7 @@ impl ExprVisitor<Result<Value, Exception>> for Interpreter {
 
     fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> Result<Value, Exception> {
 
-        if let List(ref lref) = self.evaluate(variable)? {
+        if let List(lref) = self.evaluate(variable)? {
             if let Int(index) = self.evaluate(member)? {
                 let list = lref.get_ref();
                 match list.get(index) {

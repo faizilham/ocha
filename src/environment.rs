@@ -31,8 +31,8 @@ impl Environment {
     }
 
     pub fn get(&mut self, name: &Token) -> Result<Value, Exception> {
-        if let Some(ref value) = self.symbols.get(&name.lexeme) {
-            Ok((*value).clone())
+        if let Some(value) = self.symbols.get(&name.lexeme) {
+            Ok(value.clone())
         } else {
             Err(declare_err(name))
         }
