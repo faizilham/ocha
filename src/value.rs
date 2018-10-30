@@ -169,6 +169,14 @@ impl VecList {
         self.values.borrow_mut().push(value);
     }
 
+    pub fn pop(&self) -> Option<Value> {
+        self.values.borrow_mut().pop()
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.borrow().len()
+    }
+
     pub fn get(&self, index: i64) -> Result<Value, &'static str> {
         if let Some(value) = self.values.borrow().get(index as usize) {
             Ok((value).clone())

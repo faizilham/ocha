@@ -8,6 +8,7 @@ mod lexer;
 mod parser;
 mod token;
 mod value;
+mod runtime;
 
 use exception::print_error;
 use std::fs::File;
