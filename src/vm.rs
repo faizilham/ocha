@@ -1,4 +1,5 @@
 use value::Value;
+use value::VecList;
 use token::Literal;
 use heap::Heap;
 
@@ -27,6 +28,10 @@ pub enum Bytecode {
     LTE,
     NEG,
     NOT,
+
+    // list operations
+    BUILD_LIST(usize),
+    GET_LIST,
 
     // to be removed
     PRINT(usize),
@@ -225,16 +230,38 @@ impl VM {
                     *a = Bool(a.ordering(&b)? <= 0);
                 },
 
+                // list operator
+                BUILD_LIST(count) => {
+                    let start = self.stack.len() - count;
+                    let values = self.stack.split_off(start);
+                    let veclist = self.heap.allocate_list(VecList::from(values));
+
+                    self.push(veclist);
+                },
+
+                GET_LIST => {
+                    let index = self.pop();
+                    let listval = self.peek(0);
+
+                    let result = if let List(lref) = listval {
+                        if let Int(index) = index {
+                            lref.get_ref().get(index)
+                        } else {
+                            Err("Invalid member type for get operator")
+                        }
+                    } else {
+                        Err("Invalid container type for get operator")
+                    };
+
+                    *listval = result?;
+                },
+
                 PRINT(count) => {
-                    let mut values : Vec<Value> = Vec::with_capacity(count);
-                    let mut i = 0;
+                    let start = self.stack.len() - count;
 
-                    while i < count {
-                        values.push(self.pop());
-                        i += 1;
-                    }
+                    let values = self.stack.split_off(start);
 
-                    for value in values.iter().rev() {
+                    for value in values {
                         print!("{} ", value.to_string());
 
                     }

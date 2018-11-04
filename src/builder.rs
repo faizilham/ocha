@@ -16,7 +16,9 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, ()> {
     let mut builder = Builder::new();
 
     for statement in statements {
-        builder.generate(&statement); //TODO: handle error
+        if let Err(e) = builder.generate(&statement) {
+            println!("Error: {}", e); // TODO: line error
+        }
     }
 
     builder.emit(Bytecode::HALT);
@@ -25,7 +27,7 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, ()> {
     Ok(Chunk { codes, literals })
 }
 
-type BuilderResult = Result<(), Exception>;
+type BuilderResult = Result<(), &'static str>;
 
 
 impl Builder {
@@ -117,8 +119,13 @@ impl ExprVisitor<BuilderResult> for Builder {
         Ok(())
     }
 
-    fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> BuilderResult {
-        unimplemented!();
+    fn visit_get(&mut self, variable: &Box<Expr>, _: &Token, member: &Box<Expr>) -> BuilderResult {
+        self.generate_expr(variable)?;
+        self.generate_expr(member)?;
+
+        self.emit(Bytecode::GET_LIST);
+
+        Ok(())
     }
 
     fn visit_grouping(&mut self, expr: &Box<Expr>) -> BuilderResult {
@@ -134,7 +141,13 @@ impl ExprVisitor<BuilderResult> for Builder {
     }
 
     fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> BuilderResult {
-        unimplemented!();
+        for expr in exprs {
+            self.generate_expr(expr)?;
+        }
+
+        self.emit(Bytecode::BUILD_LIST(exprs.len()));
+
+        Ok(())
     }
 
     fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> BuilderResult {
@@ -142,7 +155,7 @@ impl ExprVisitor<BuilderResult> for Builder {
 
         match operator.token_type {
             BANG      => self.emit(Bytecode::NOT),
-            MINUS           => self.emit(Bytecode::NEG),
+            MINUS     => self.emit(Bytecode::NEG),
 
             _ => unreachable!()
         };
