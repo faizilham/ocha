@@ -98,10 +98,6 @@ fn break_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let token = parser.advance().unwrap();
     parser.expect(SEMICOLON, "Expect ';' after break")?;
 
-    if parser.loop_level == 0 {
-        return Err(parser.exception("Invalid break outside of loop"));
-    }
-
     Ok(create_stmt(token.line, StmtNode::Break { token }))
 }
 
@@ -155,9 +151,7 @@ fn while_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let condition = expression(parser)?;
     parser.expect(RIGHT_PAREN, "Expect ')' after condition")?;
 
-    parser.loop_level += 1;
     let body = statement(parser)?;
-    parser.loop_level -= 1;
     Ok(create_stmt(line, StmtNode::While { condition, body }))
 }
 
@@ -295,12 +289,11 @@ fn create_expr(line: i32, node: ExprNode) -> Box<Expr> {
 struct ParserState {
     tokens: Vec<Token>,
     last_line: i32,
-    loop_level: i32
 }
 
 impl ParserState {
     fn new(tokens : Vec<Token>) -> ParserState {
-        ParserState{tokens: tokens, last_line: 1, loop_level: 0}
+        ParserState{ tokens: tokens, last_line: 1 }
     }
 
     fn at_end(&self) -> bool{

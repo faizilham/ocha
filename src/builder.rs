@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ast::expr::{Expr, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
 use exception::Exception;
@@ -8,11 +10,26 @@ use vm::Chunk;
 use vm::Bytecode;
 use line_data::LineData;
 
+enum BranchType {
+    BR,
+    BRF
+}
+
+type Label = i32;
+
+enum Context {
+    WhileCtx { end_label: Label },
+}
+
+
 struct Builder {
     pub codes: Vec<Bytecode>,
     pub literals: Vec<Literal>,
     pub line_data: LineData,
+    labels: HashMap<Label, Vec<(usize, BranchType)>>,
+    next_label: Label,
     last_line: i32,
+    contexts: Vec<Context>
 }
 
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, ()> {
@@ -36,7 +53,15 @@ type BuilderResult = Result<(), Exception>;
 
 impl Builder {
     fn new () -> Builder {
-        Builder { codes: Vec::new(), literals: Vec::new(), last_line: 0, line_data: LineData::new() }
+        Builder {
+            codes: Vec::new(),
+            literals: Vec::new(),
+            last_line: 0,
+            line_data: LineData::new(),
+            labels: HashMap::new(),
+            next_label: 0,
+            contexts: Vec::new()
+        }
     }
 
     fn generate(&mut self, stmt: &Box<Stmt>) -> BuilderResult {
@@ -69,6 +94,39 @@ impl Builder {
             unreachable!();
         }
     }
+
+    fn create_label(&mut self) -> Label {
+        let label = self.next_label;
+        self.next_label += 1;
+
+        self.labels.insert(label, Vec::new());
+
+        label
+    }
+
+    fn branch_placeholder(&mut self, line: i32, branch_type: BranchType, label: Label) {
+        let position = self.placeholder(line);
+        let branches = self.labels.get_mut(&label).unwrap();
+
+        branches.push((position, branch_type));
+    }
+
+    fn enclose_label(&mut self, label: Label, label_pos: usize) {
+        let branches = self.labels.remove(&label).unwrap();
+
+        for (br_pos, br_type) in branches {
+            let bytecode = match br_type {
+                BranchType::BR => Bytecode::BR(label_pos),
+                BranchType::BRF => Bytecode::BRF(label_pos)
+            };
+
+            self.replace(br_pos, bytecode);
+        }
+    }
+
+    fn get_context(&self) -> Option<&Context> {
+        self.contexts.get(self.contexts.len() - 1)
+    }
 }
 
 impl StmtVisitor<BuilderResult> for Builder {
@@ -84,7 +142,18 @@ impl StmtVisitor<BuilderResult> for Builder {
     }
 
     fn visit_break(&mut self, token: &Token) -> BuilderResult {
-        unimplemented!();
+        let line = token.line;
+        let label : Label;
+
+        if let Some(Context::WhileCtx { end_label }) = self.get_context() {
+            // branch to end of loop
+            label = *end_label;
+        } else {
+            return error(line, "Invalid break outside of loop")
+        }
+
+        self.branch_placeholder(line, BranchType::BR, label);
+        Ok(())
     }
 
     fn visit_expression(&mut self, expr: &Box<Expr>) -> BuilderResult {
@@ -146,16 +215,25 @@ impl StmtVisitor<BuilderResult> for Builder {
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> BuilderResult {
         let line = self.last_line;
 
-        let while_start = self.codes.len();
+        let while_start_pos = self.codes.len();
+        let while_end = self.create_label();
+
         self.generate_expr(condition)?;
 
-        let loop_brf_placeholder = self.placeholder(line);
+        // brf to loop end
+        self.branch_placeholder(line, BranchType::BRF, while_end);
+
+        // generate body
+        self.contexts.push(Context::WhileCtx { end_label: while_end });
 
         self.generate(body)?;
 
-        self.emit(line, Bytecode::BR(while_start)); // br to top
-        let while_end = self.codes.len();
-        self.replace(loop_brf_placeholder, Bytecode::BRF(while_end));
+        self.contexts.pop();
+
+        self.emit(line, Bytecode::BR(while_start_pos)); // br to top
+
+        let while_end_pos = self.codes.len();
+        self.enclose_label(while_end, while_end_pos);
 
         Ok(())
     }
@@ -266,4 +344,8 @@ impl ExprVisitor<BuilderResult> for Builder {
         unimplemented!();
     }
 
+}
+
+fn error(line: i32, message: &'static str) -> BuilderResult {
+    Err(Exception::ParseErr(line, String::from(message)))
 }
