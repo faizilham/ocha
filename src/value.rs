@@ -2,8 +2,8 @@ use std::rc::Rc;
 use std::cell::Cell;
 use std::cell::RefCell;
 
-use heap::HeapPtr;
-use heap::Traceable;
+use super::heap::HeapPtr;
+use super::heap::Traceable;
 
 /*** Value Declaration ***/
 

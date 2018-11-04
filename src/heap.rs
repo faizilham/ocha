@@ -1,9 +1,9 @@
 use std::rc::Rc;
 use std::rc::Weak;
 
-use value::Value;
-use value::VecList;
-use value::OchaStr;
+use super::value::Value;
+use super::value::VecList;
+use super::value::OchaStr;
 
 pub trait Traceable {
     fn trace(&self);
