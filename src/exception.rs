@@ -1,7 +1,6 @@
 pub enum Exception {
     ParseErr(i32, String), // line, message
     RuntimeErr(i32, String), // line, message
-    BreakException
 }
 
 use self::Exception::*;

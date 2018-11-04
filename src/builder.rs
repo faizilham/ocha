@@ -10,6 +10,7 @@ use vm::Bytecode;
 struct Builder {
     pub codes: Vec<Bytecode>,
     pub literals: Vec<Literal>,
+    last_line: i32,
 }
 
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, ()> {
@@ -17,33 +18,36 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, ()> {
 
     for statement in statements {
         if let Err(e) = builder.generate(&statement) {
-            println!("Error: {}", e); // TODO: line error
+            e.print();
         }
     }
 
-    builder.emit(Bytecode::HALT);
+    let line = builder.last_line;
+    builder.emit(line, Bytecode::HALT);
 
-    let Builder { codes, literals } = builder;
+    let Builder { codes, literals, .. } = builder;
     Ok(Chunk { codes, literals })
 }
 
-type BuilderResult = Result<(), &'static str>;
+type BuilderResult = Result<(), Exception>;
 
 
 impl Builder {
     fn new () -> Builder {
-        Builder { codes: Vec::new(), literals: Vec::new() }
+        Builder { codes: Vec::new(), literals: Vec::new(), last_line: 0 }
     }
 
     fn generate(&mut self, stmt: &Box<Stmt>) -> BuilderResult {
+        self.last_line = stmt.line;
         Stmt::accept(stmt, self)
     }
 
     fn generate_expr(&mut self, expr: &Box<Expr>) -> BuilderResult {
+        self.last_line = expr.line;
         Expr::accept(expr, self)
     }
 
-    fn emit(&mut self, bytecode : Bytecode) {
+    fn emit(&mut self, line: i32, bytecode : Bytecode) {
         self.codes.push(bytecode);
     }
 }
@@ -62,8 +66,9 @@ impl StmtVisitor<BuilderResult> for Builder {
     }
 
     fn visit_expression(&mut self, expr: &Box<Expr>) -> BuilderResult {
+        let line = self.last_line;
         self.generate_expr(expr)?;
-        self.emit(Bytecode::POP);
+        self.emit(line, Bytecode::POP);
 
         Ok(())
     }
@@ -73,11 +78,13 @@ impl StmtVisitor<BuilderResult> for Builder {
     }
 
     fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> BuilderResult {
+        let line = self.last_line;
+
         for expr in exprs {
             self.generate_expr(expr)?;
         }
 
-        self.emit(Bytecode::PRINT(exprs.len()));
+        self.emit(line, Bytecode::PRINT(exprs.len()));
 
         Ok(())
     }
@@ -98,20 +105,22 @@ impl StmtVisitor<BuilderResult> for Builder {
 
 impl ExprVisitor<BuilderResult> for Builder {
     fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> BuilderResult {
+        let line = self.last_line;
+
         self.generate_expr(left)?;
         self.generate_expr(right)?;
 
         match operator.token_type {
-            BANG_EQUAL      => self.emit(Bytecode::NEQ),
-            EQUAL_EQUAL     => self.emit(Bytecode::EQ),
-            GREATER         => self.emit(Bytecode::GT),
-            GREATER_EQUAL   => self.emit(Bytecode::GTE),
-            LESS            => self.emit(Bytecode::LT),
-            LESS_EQUAL      => self.emit(Bytecode::LTE),
-            STAR            => self.emit(Bytecode::MUL),
-            MINUS           => self.emit(Bytecode::SUB),
-            SLASH           => self.emit(Bytecode::DIV),
-            PLUS            => self.emit(Bytecode::ADD),
+            BANG_EQUAL      => self.emit(line, Bytecode::NEQ),
+            EQUAL_EQUAL     => self.emit(line, Bytecode::EQ),
+            GREATER         => self.emit(line, Bytecode::GT),
+            GREATER_EQUAL   => self.emit(line, Bytecode::GTE),
+            LESS            => self.emit(line, Bytecode::LT),
+            LESS_EQUAL      => self.emit(line, Bytecode::LTE),
+            STAR            => self.emit(line, Bytecode::MUL),
+            MINUS           => self.emit(line, Bytecode::SUB),
+            SLASH           => self.emit(line, Bytecode::DIV),
+            PLUS            => self.emit(line, Bytecode::ADD),
 
             _ => unreachable!()
         };
@@ -120,10 +129,12 @@ impl ExprVisitor<BuilderResult> for Builder {
     }
 
     fn visit_get(&mut self, variable: &Box<Expr>, _: &Token, member: &Box<Expr>) -> BuilderResult {
+        let line = self.last_line;
+
         self.generate_expr(variable)?;
         self.generate_expr(member)?;
 
-        self.emit(Bytecode::GET_LIST);
+        self.emit(line, Bytecode::GET_LIST);
 
         Ok(())
     }
@@ -133,29 +144,35 @@ impl ExprVisitor<BuilderResult> for Builder {
     }
 
     fn visit_literal(&mut self, value: &Literal) -> BuilderResult {
+        let line = self.last_line;
+
         let idx = self.literals.len();
         self.literals.push(value.clone()); //TODO: optimize this with no clone
-        self.emit(Bytecode::CONST(idx));
+        self.emit(line, Bytecode::CONST(idx));
 
         Ok(())
     }
 
     fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> BuilderResult {
+        let line = self.last_line;
+
         for expr in exprs {
             self.generate_expr(expr)?;
         }
 
-        self.emit(Bytecode::BUILD_LIST(exprs.len()));
+        self.emit(line, Bytecode::BUILD_LIST(exprs.len()));
 
         Ok(())
     }
 
     fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> BuilderResult {
+        let line = self.last_line;
+
         self.generate_expr(expr)?;
 
         match operator.token_type {
-            BANG      => self.emit(Bytecode::NOT),
-            MINUS     => self.emit(Bytecode::NEG),
+            BANG      => self.emit(line, Bytecode::NOT),
+            MINUS     => self.emit(line, Bytecode::NEG),
 
             _ => unreachable!()
         };

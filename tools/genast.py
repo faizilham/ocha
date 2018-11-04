@@ -33,6 +33,12 @@ AST = {
     )
 }
 
+META_IMPORT = []
+
+META = [
+    ("line", "i32")
+]
+
 TAB = " "*4
 
 def extend_writer(writer):
@@ -83,6 +89,9 @@ def define_ast(basename, imports, type_data):
     with open(output_dir + "/" + basename.lower() + ".rs", "w") as writer:
         extend_writer(writer)
 
+        for im in META_IMPORT:
+            writer.writeln("use {};".format(im))
+
         for im in imports:
             writer.writeln("use {};".format(im))
 
@@ -90,9 +99,20 @@ def define_ast(basename, imports, type_data):
 
         types = parse_types(type_data)
 
-        # AST Enum
+        # AST Struct
         writer.writeln("#[derive(Debug)]")
-        writer.start_block("pub enum {}".format(basename))
+        writer.start_block("pub struct {}".format(basename))
+
+        for (field, ftype) in META:
+            writer.writeln("pub {}: {},".format(field, ftype))
+
+        writer.writeln("pub node: {}Node,".format(basename))
+
+        writer.end_block()
+
+        # AST Node Enum
+        writer.writeln("#[derive(Debug)]")
+        writer.start_block("pub enum {}Node".format(basename))
 
         for (classname, fields) in types:
             items = ", ".join(['{}: {}'.format(*field) for field in fields])
@@ -114,16 +134,33 @@ def define_ast(basename, imports, type_data):
         writer.end_block()
         writer.writeln()
 
-        # Accept function
+        # Constructor
         writer.start_block("impl {}".format(basename))
+
+        constructor_params = []
+        constructor_fields = []
+        for (field, ftype) in META:
+            constructor_fields.append(field)
+            constructor_params.append("{}: {}".format(field, ftype))
+
+        constructor_params.append("node: {0}Node".format(basename))
+        constructor_fields.append("node")
+
+        writer.start_block("pub fn new({1}) -> {0}".format(basename, ", ".join(constructor_params)))
+
+
+        writer.writeln("{}{{ {} }}".format(basename, ", ".join(constructor_fields)))
+        writer.end_block()
+
+        # Accept function
         writer.start_block("pub fn accept<T, Visitor: {0}Visitor<T>>({1}: &Box<{0}>, visitor: &mut Visitor) -> T".format(basename, basename.lower()))
-        writer.start_block("match {}.as_ref()".format(basename.lower()))
+        writer.start_block("match &{}.node".format(basename.lower()))
 
         for (classname, fields) in types:
             left_param = ", ".join(['{}'.format(fieldname) for (fieldname, _) in fields])
             right_param = ", ".join([fieldname for (fieldname, _) in fields])
 
-            writer.writeln("{0}::{1}{{{2}}} => visitor.visit_{3}({4}),".format(basename, classname, left_param, classname.lower(), right_param))
+            writer.writeln("{0}Node::{1}{{{2}}} => visitor.visit_{3}({4}),".format(basename, classname, left_param, classname.lower(), right_param))
         writer.end_block()
         writer.end_block()
         writer.end_block()

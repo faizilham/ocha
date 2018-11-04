@@ -2,7 +2,12 @@ use token::Token;
 use token::Literal;
 
 #[derive(Debug)]
-pub enum Expr {
+pub struct Expr {
+    pub line: i32,
+    pub node: ExprNode,
+}
+#[derive(Debug)]
+pub enum ExprNode {
     Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
     Get { variable: Box<Expr>, operator: Token, member: Box<Expr> },
     Grouping { expr: Box<Expr> },
@@ -25,16 +30,19 @@ pub trait ExprVisitor<T> {
 }
 
 impl Expr {
+    pub fn new(line: i32, node: ExprNode) -> Expr {
+        Expr{ line, node }
+    }
     pub fn accept<T, Visitor: ExprVisitor<T>>(expr: &Box<Expr>, visitor: &mut Visitor) -> T {
-        match expr.as_ref() {
-            Expr::Binary{left, operator, right} => visitor.visit_binary(left, operator, right),
-            Expr::Get{variable, operator, member} => visitor.visit_get(variable, operator, member),
-            Expr::Grouping{expr} => visitor.visit_grouping(expr),
-            Expr::Literal{value} => visitor.visit_literal(value),
-            Expr::ListInit{exprs} => visitor.visit_listinit(exprs),
-            Expr::Unary{operator, expr} => visitor.visit_unary(operator, expr),
-            Expr::Ternary{condition, true_branch, false_branch} => visitor.visit_ternary(condition, true_branch, false_branch),
-            Expr::Variable{name} => visitor.visit_variable(name),
+        match &expr.node {
+            ExprNode::Binary{left, operator, right} => visitor.visit_binary(left, operator, right),
+            ExprNode::Get{variable, operator, member} => visitor.visit_get(variable, operator, member),
+            ExprNode::Grouping{expr} => visitor.visit_grouping(expr),
+            ExprNode::Literal{value} => visitor.visit_literal(value),
+            ExprNode::ListInit{exprs} => visitor.visit_listinit(exprs),
+            ExprNode::Unary{operator, expr} => visitor.visit_unary(operator, expr),
+            ExprNode::Ternary{condition, true_branch, false_branch} => visitor.visit_ternary(condition, true_branch, false_branch),
+            ExprNode::Variable{name} => visitor.visit_variable(name),
         }
     }
 }

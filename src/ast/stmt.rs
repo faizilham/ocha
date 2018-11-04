@@ -2,7 +2,12 @@ use ast::expr::Expr;
 use token::Token;
 
 #[derive(Debug)]
-pub enum Stmt {
+pub struct Stmt {
+    pub line: i32,
+    pub node: StmtNode,
+}
+#[derive(Debug)]
+pub enum StmtNode {
     Assignment { name: Token, expr: Box<Expr> },
     Block { body: Vec<Box<Stmt>> },
     Break { token: Token },
@@ -27,17 +32,20 @@ pub trait StmtVisitor<T> {
 }
 
 impl Stmt {
+    pub fn new(line: i32, node: StmtNode) -> Stmt {
+        Stmt{ line, node }
+    }
     pub fn accept<T, Visitor: StmtVisitor<T>>(stmt: &Box<Stmt>, visitor: &mut Visitor) -> T {
-        match stmt.as_ref() {
-            Stmt::Assignment{name, expr} => visitor.visit_assignment(name, expr),
-            Stmt::Block{body} => visitor.visit_block(body),
-            Stmt::Break{token} => visitor.visit_break(token),
-            Stmt::Expression{expr} => visitor.visit_expression(expr),
-            Stmt::If{condition, true_branch, false_branch} => visitor.visit_if(condition, true_branch, false_branch),
-            Stmt::Print{exprs} => visitor.visit_print(exprs),
-            Stmt::Set{get_expr, expr} => visitor.visit_set(get_expr, expr),
-            Stmt::VarDecl{name, expr} => visitor.visit_vardecl(name, expr),
-            Stmt::While{condition, body} => visitor.visit_while(condition, body),
+        match &stmt.node {
+            StmtNode::Assignment{name, expr} => visitor.visit_assignment(name, expr),
+            StmtNode::Block{body} => visitor.visit_block(body),
+            StmtNode::Break{token} => visitor.visit_break(token),
+            StmtNode::Expression{expr} => visitor.visit_expression(expr),
+            StmtNode::If{condition, true_branch, false_branch} => visitor.visit_if(condition, true_branch, false_branch),
+            StmtNode::Print{exprs} => visitor.visit_print(exprs),
+            StmtNode::Set{get_expr, expr} => visitor.visit_set(get_expr, expr),
+            StmtNode::VarDecl{name, expr} => visitor.visit_vardecl(name, expr),
+            StmtNode::While{condition, body} => visitor.visit_while(condition, body),
         }
     }
 }
