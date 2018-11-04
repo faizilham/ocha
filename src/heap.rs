@@ -1,10 +1,6 @@
 use std::rc::Rc;
 use std::rc::Weak;
 
-use super::value::Value;
-use super::value::VecList;
-use super::value::OchaStr;
-
 pub trait Traceable {
     fn trace(&self);
     fn reset_trace(&self);
@@ -49,20 +45,11 @@ impl Heap {
         Heap { objs: Vec::new() }
     }
 
-    fn allocate<T : Traceable + 'static>(&mut self, obj: T) -> HeapPtr<T> {
+    pub fn allocate<T : Traceable + 'static>(&mut self, obj: T) -> HeapPtr<T> {
         let rf = Rc::new(obj);
         self.objs.push(rf.clone());
 
         HeapPtr::new(rf)
-    }
-
-    pub fn allocate_str(&mut self, string: String) -> Value {
-        let ochastr = OchaStr::new(string);
-        Value::Str(self.allocate(ochastr))
-    }
-
-    pub fn allocate_list(&mut self, list: VecList) -> Value {
-        Value::List(self.allocate(list))
     }
 
     pub fn sweep(&mut self) {
@@ -75,5 +62,13 @@ impl Heap {
                 self.objs.remove(i);
             }
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.objs.clear();
+    }
+
+    pub fn size(&self) -> usize {
+        self.objs.len()
     }
 }

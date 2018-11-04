@@ -22,7 +22,7 @@ pub enum Value {
 
 use self::Value::*;
 
-fn get_traceable(value: &Value) -> Option<Rc<Traceable>> {
+pub fn get_traceable(value: &Value) -> Option<Rc<Traceable>> {
     match value {
         Str(s) => Some(s.get_ref()),
         List(l) => Some(l.get_ref()),
@@ -114,12 +114,13 @@ impl Clone for Value {
 #[derive(Debug)]
 pub struct OchaStr {
     traced: Cell<bool>,
-    string: String
+    string: String,
+    literal : bool
 }
 
 impl OchaStr {
-    pub fn new (string: String) -> OchaStr {
-        OchaStr { traced: Cell::new(false), string }
+    pub fn new (string: String, literal: bool) -> OchaStr {
+        OchaStr { traced: Cell::new(false), string, literal }
     }
 
     pub fn to_string(&self) -> String {
@@ -147,7 +148,7 @@ impl Traceable for OchaStr {
     }
 
     fn is_traced(&self) -> bool {
-        self.traced.get()
+        self.literal || self.traced.get()
     }
 }
 

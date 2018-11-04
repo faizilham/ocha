@@ -1,9 +1,9 @@
-use value::Value;
-use value::VecList;
-use token::Literal;
-use heap::Heap;
-use line_data::LineData;
 use exception::report_error;
+use heap::{Heap, Traceable, HeapPtr};
+use line_data::LineData;
+use token::Literal;
+use value::{Value, OchaStr, VecList};
+use value::get_traceable;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -61,16 +61,29 @@ pub struct VM {
     ip: usize,
     fp: isize,
     line_data: LineData,
+    max_objects: usize
 }
+
+const INITIAL_GC_THRESHOLD : usize = 50;
 
 impl VM {
     pub fn new (chunk: Chunk) -> VM {
         let Chunk { codes, mut literals, line_data } = chunk;
 
         let stack = Vec::with_capacity(256);
-        let mut heap = Heap::new();
+        let heap = Heap::new();
+        let constants = Vec::with_capacity(literals.len());
 
-        let mut constants = Vec::with_capacity(literals.len());
+        let mut vm = VM {
+            codes,
+            constants,
+            stack,
+            heap,
+            line_data,
+            ip: 0,
+            fp: 0,
+            max_objects: INITIAL_GC_THRESHOLD,
+        };
 
         for literal in literals.drain(..) {
             let value = match literal {
@@ -78,13 +91,13 @@ impl VM {
                 Literal::Int(i) => Int(i),
                 Literal::Float(f) => Float(f),
                 Literal::Bool(b) => Bool(b),
-                Literal::Str(s) => heap.allocate_str(s)
+                Literal::Str(s) => vm.allocate_str_literal(s)
             };
 
-            constants.push(value);
+            vm.constants.push(value);
         }
 
-        VM { codes, constants, stack, heap, ip: 0, fp: 0, line_data }
+        vm
     }
 
     pub fn run(&mut self) {
@@ -93,7 +106,7 @@ impl VM {
             report_error(self.line_data.get_line(last), e);
         }
 
-        self.heap.sweep();
+        self.cleanup()
     }
 
     fn run_loop(&mut self) -> Result<(), &'static str> {
@@ -140,7 +153,7 @@ impl VM {
                         (a, b) => {
                             if is_string(&a) || is_string(&b) {
                                 let s = format!("{}{}", a.to_string(), b.to_string());
-                                self.heap.allocate_str(s)
+                                self.allocate_str(s)
                             } else {
                                 return Err("Invalid type for operator +")
                             }
@@ -256,7 +269,7 @@ impl VM {
                 BUILD_LIST(count) => {
                     let start = self.stack.len() - count;
                     let values = self.stack.split_off(start);
-                    let veclist = self.heap.allocate_list(VecList::from(values));
+                    let veclist = self.allocate_list(VecList::from(values));
 
                     self.push(veclist);
                 },
@@ -351,6 +364,52 @@ impl VM {
         } else {
             panic!("Unknown constant");
         }
+    }
+
+    // heap allocation & gc
+    fn allocate<T : Traceable + 'static>(&mut self, obj: T) -> HeapPtr<T> {
+        // schedule gc
+        let num_objects = self.heap.size();
+        if num_objects >= self.max_objects {
+            self.gc()
+        }
+
+        self.heap.allocate(obj)
+    }
+
+    fn allocate_str_literal(&mut self, string: String) -> Value {
+        let ochastr = OchaStr::new(string, true);
+        Value::Str(self.allocate(ochastr))
+    }
+
+    fn allocate_str(&mut self, string: String) -> Value {
+        let ochastr = OchaStr::new(string, false);
+        Value::Str(self.allocate(ochastr))
+    }
+
+    fn allocate_list(&mut self, list: VecList) -> Value {
+        Value::List(self.allocate(list))
+    }
+
+    fn gc(&mut self) {
+        self.trace();
+        self.heap.sweep();
+
+        let num_objects = self.heap.size();
+        self.max_objects = std::cmp::max(num_objects * 2, INITIAL_GC_THRESHOLD);
+    }
+
+    fn trace(&mut self) {
+        for value in self.stack.iter() {
+            if let Some(obj) = get_traceable(value) {
+                obj.trace();
+            }
+        }
+    }
+
+    fn cleanup(&mut self) {
+        self.heap.clear();
+        self.constants.clear();
     }
 }
 
