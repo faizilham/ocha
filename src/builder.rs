@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ast::expr::{Expr, ExprVisitor};
+use ast::expr::{Expr, ExprNode, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
 use exception::Exception;
 use token::Token;
@@ -213,7 +213,17 @@ impl StmtVisitor<BuilderResult> for Builder {
     }
 
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> BuilderResult {
-        unimplemented!();
+        if let ExprNode::Get {variable, operator, member } = &get_expr.node {
+            self.generate_expr(expr)?;
+            self.generate_expr(variable)?;
+            self.generate_expr(member)?;
+
+            self.emit(operator.line, Bytecode::SET_LIST);
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
     }
 
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> BuilderResult {

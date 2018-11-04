@@ -33,7 +33,8 @@ pub enum Bytecode {
 
     // list operations
     BUILD_LIST(usize),
-    GET_LIST,
+    GET_LIST, // get member
+    SET_LIST, // set member
 
     // branches
     BR(usize),
@@ -275,6 +276,22 @@ impl VM {
                     };
 
                     *listval = result?;
+                },
+
+                SET_LIST => {
+                    let index = self.pop();
+                    let listval = self.pop();
+                    let value = self.pop();
+
+                    if let List(lref) = listval {
+                        if let Int(index) = index {
+                            lref.get_ref().put(index, value)?;
+                        } else {
+                            return Err("Invalid member type for get operator")
+                        }
+                    } else {
+                        return Err("Invalid container type for get operator")
+                    }
                 },
 
                 // branches
