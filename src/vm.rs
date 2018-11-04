@@ -14,8 +14,8 @@ pub enum Bytecode {
     // memory and constants
     POP,
     CONST(usize),
-    STORE(usize),
-    LOAD(usize),
+    STORE(isize),
+    LOAD(isize),
 
     // math & logic
     ADD,
@@ -58,6 +58,7 @@ pub struct VM {
     stack: Vec<Value>,
     heap: Heap,
     ip: usize,
+    fp: isize,
     line_data: LineData,
 }
 
@@ -82,7 +83,7 @@ impl VM {
             constants.push(value);
         }
 
-        VM { codes, constants, stack, heap, ip: 0, line_data }
+        VM { codes, constants, stack, heap, ip: 0, fp: 0, line_data }
     }
 
     pub fn run(&mut self) {
@@ -111,8 +112,19 @@ impl VM {
                     self.push(value);
                 },
 
-                STORE(_) => unimplemented!(),
-                LOAD(_) => unimplemented!(),
+                STORE(offset) => {
+                    let value = self.pop();
+                    let pos = self.fp + offset;
+
+                    let var = self.stack.get_mut(pos as usize).unwrap();
+                    *var = value;
+                },
+
+                LOAD(offset) => {
+                    let pos = self.fp + offset;
+                    let value = self.stack.get(pos as usize).unwrap().clone();
+                    self.stack.push(value);
+                },
 
                 ADD => {
                     let right = self.pop();
