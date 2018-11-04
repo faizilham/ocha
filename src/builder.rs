@@ -6,10 +6,12 @@ use token::TokenType::*;
 use token::Literal;
 use vm::Chunk;
 use vm::Bytecode;
+use line_data::LineData;
 
 struct Builder {
     pub codes: Vec<Bytecode>,
     pub literals: Vec<Literal>,
+    pub line_data: LineData,
     last_line: i32,
 }
 
@@ -25,8 +27,8 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, ()> {
     let line = builder.last_line;
     builder.emit(line, Bytecode::HALT);
 
-    let Builder { codes, literals, .. } = builder;
-    Ok(Chunk { codes, literals })
+    let Builder { codes, literals, line_data, .. } = builder;
+    Ok(Chunk { codes, literals, line_data })
 }
 
 type BuilderResult = Result<(), Exception>;
@@ -34,7 +36,7 @@ type BuilderResult = Result<(), Exception>;
 
 impl Builder {
     fn new () -> Builder {
-        Builder { codes: Vec::new(), literals: Vec::new(), last_line: 0 }
+        Builder { codes: Vec::new(), literals: Vec::new(), last_line: 0, line_data: LineData::new() }
     }
 
     fn generate(&mut self, stmt: &Box<Stmt>) -> BuilderResult {
@@ -48,7 +50,10 @@ impl Builder {
     }
 
     fn emit(&mut self, line: i32, bytecode : Bytecode) {
+        let index = self.codes.len();
         self.codes.push(bytecode);
+
+        self.line_data.add(index, line);
     }
 }
 

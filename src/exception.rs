@@ -19,8 +19,12 @@ fn error_message(line: i32, message: &str) -> String{
     format!("{} [line {}]", message, line)
 }
 
-fn report_error(line: i32, message: &str){
-    print_error(error_message(line, message).as_str());
+pub fn report_error(line: i32, message: &str){
+    if line < 0 {
+        print_error(message);
+    } else {
+        print_error(error_message(line, message).as_str());
+    }
 }
 
 pub fn print_error(message : &str){

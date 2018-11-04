@@ -2,6 +2,8 @@ use value::Value;
 use value::VecList;
 use token::Literal;
 use heap::Heap;
+use line_data::LineData;
+use exception::report_error;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -42,7 +44,8 @@ use self::Value::*;
 
 pub struct Chunk {
     pub codes: Vec<Bytecode>,
-    pub literals: Vec<Literal>
+    pub literals: Vec<Literal>,
+    pub line_data: LineData,
 }
 
 pub struct VM {
@@ -51,11 +54,12 @@ pub struct VM {
     stack: Vec<Value>,
     heap: Heap,
     ip: usize,
+    line_data: LineData,
 }
 
 impl VM {
     pub fn new (chunk: Chunk) -> VM {
-        let Chunk { codes, mut literals } = chunk;
+        let Chunk { codes, mut literals, line_data } = chunk;
 
         let stack = Vec::new();
         let mut heap = Heap::new();
@@ -74,12 +78,13 @@ impl VM {
             constants.push(value);
         }
 
-        VM { codes, constants, stack, heap, ip: 0 }
+        VM { codes, constants, stack, heap, ip: 0, line_data }
     }
 
     pub fn run(&mut self) {
         if let Err(e) = self.run_loop() {
-            println!("Error: {}", e);
+            let last = self.ip - 1;
+            report_error(self.line_data.get_line(last), e);
         }
 
         self.heap.sweep();

@@ -4,6 +4,7 @@ mod builder;
 mod exception;
 mod heap;
 mod lexer;
+mod line_data;
 mod parser;
 mod token;
 mod value;
