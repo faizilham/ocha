@@ -13,5 +13,5 @@ Todo List
     - object prototyping
     - literal / type method ( like list.length() )
     - generator function
-    - vm runtime instead of tree interpreter
+    - vm runtime instead of tree interpreter ✔️
     - pattern matching
