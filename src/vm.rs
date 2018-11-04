@@ -35,6 +35,10 @@ pub enum Bytecode {
     BUILD_LIST(usize),
     GET_LIST,
 
+    // branches
+    BR(usize),
+    BRF(usize), // branch if false
+
     // to be removed
     PRINT(usize),
 }
@@ -61,7 +65,7 @@ impl VM {
     pub fn new (chunk: Chunk) -> VM {
         let Chunk { codes, mut literals, line_data } = chunk;
 
-        let stack = Vec::new();
+        let stack = Vec::with_capacity(256);
         let mut heap = Heap::new();
 
         let mut constants = Vec::with_capacity(literals.len());
@@ -260,6 +264,18 @@ impl VM {
 
                     *listval = result?;
                 },
+
+                // branches
+                BR(position) => {
+                    self.ip = position;
+                }
+
+                BRF(position) => {
+                    let value = self.pop();
+                    if !value.is_truthy() {
+                        self.ip = position;
+                    }
+                }
 
                 PRINT(count) => {
                     let start = self.stack.len() - count;

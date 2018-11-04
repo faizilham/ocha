@@ -49,11 +49,25 @@ impl Builder {
         Expr::accept(expr, self)
     }
 
-    fn emit(&mut self, line: i32, bytecode : Bytecode) {
+    fn emit(&mut self, line: i32, bytecode : Bytecode) -> usize {
         let index = self.codes.len();
         self.codes.push(bytecode);
 
         self.line_data.add(index, line);
+
+        index
+    }
+
+    fn placeholder(&mut self, line: i32) -> usize {
+        self.emit(line, Bytecode::NOP)
+    }
+
+    fn replace(&mut self, index: usize, bytecode: Bytecode) {
+        if let Some(code) = self.codes.get_mut(index) {
+            *code = bytecode;
+        } else {
+            unreachable!();
+        }
     }
 }
 
@@ -63,7 +77,10 @@ impl StmtVisitor<BuilderResult> for Builder {
     }
 
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> BuilderResult {
-        unimplemented!();
+        for statement in body {
+            self.generate(statement)?;
+        }
+        Ok(())
     }
 
     fn visit_break(&mut self, token: &Token) -> BuilderResult {
@@ -79,7 +96,31 @@ impl StmtVisitor<BuilderResult> for Builder {
     }
 
     fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> BuilderResult {
-        unimplemented!();
+        let line = self.last_line;
+
+        // generate condition
+        self.generate_expr(condition)?;
+
+        let brf_placeholder = self.placeholder(line); // placeholder brf to after true branch / else
+
+        // generate true branch
+        self.generate(true_branch)?;
+        let mut true_branch_finish = self.codes.len(); // instruction after the true branch
+
+
+        if let Some(false_branch) = false_branch {
+            let br_placeholder = self.placeholder(line); // add br between true & false branch
+            true_branch_finish += 1;
+
+            self.generate(false_branch)?;
+
+            let false_branch_finish = self.codes.len(); // instruction after false branch
+            self.replace(br_placeholder, Bytecode::BR(false_branch_finish));
+        }
+
+        self.replace(brf_placeholder, Bytecode::BRF(true_branch_finish));
+
+        Ok(())
     }
 
     fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> BuilderResult {
