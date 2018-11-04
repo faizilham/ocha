@@ -144,7 +144,20 @@ impl StmtVisitor<BuilderResult> for Builder {
     }
 
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> BuilderResult {
-        unimplemented!();
+        let line = self.last_line;
+
+        let while_start = self.codes.len();
+        self.generate_expr(condition)?;
+
+        let loop_brf_placeholder = self.placeholder(line);
+
+        self.generate(body)?;
+
+        self.emit(line, Bytecode::BR(while_start)); // br to top
+        let while_end = self.codes.len();
+        self.replace(loop_brf_placeholder, Bytecode::BRF(while_end));
+
+        Ok(())
     }
 
 }
