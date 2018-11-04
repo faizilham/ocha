@@ -227,7 +227,26 @@ impl ExprVisitor<BuilderResult> for Builder {
     }
 
     fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> BuilderResult {
-        unimplemented!();
+        let line = self.last_line;
+
+        // generate condition
+        self.generate_expr(condition)?;
+
+        let brf_placeholder = self.placeholder(line); // placeholder brf to after true branch / else
+
+        // generate true branch
+        self.generate_expr(true_branch)?;
+        let br_placeholder = self.placeholder(line); // add br between true & false branch
+
+        let true_branch_finish = self.codes.len(); // instruction after the true branch
+        self.replace(brf_placeholder, Bytecode::BRF(true_branch_finish));
+
+        self.generate_expr(false_branch)?;
+
+        let false_branch_finish = self.codes.len(); // instruction after false branch
+        self.replace(br_placeholder, Bytecode::BR(false_branch_finish));
+
+        Ok(())
     }
 
     fn visit_variable(&mut self, name: &Token) -> BuilderResult {
