@@ -6,6 +6,7 @@ mod heap;
 mod lexer;
 mod line_data;
 mod parser;
+mod symbol_table;
 mod token;
 mod value;
 mod vm;

@@ -9,6 +9,7 @@ use token::Literal;
 use vm::Chunk;
 use vm::Bytecode;
 use line_data::LineData;
+use symbol_table::SymbolTable;
 
 enum BranchType {
     BR,
@@ -29,7 +30,8 @@ struct Builder {
     labels: HashMap<Label, Vec<(usize, BranchType)>>,
     next_label: Label,
     last_line: i32,
-    contexts: Vec<Context>
+    contexts: Vec<Context>,
+    symbols: SymbolTable,
 }
 
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, ()> {
@@ -60,7 +62,8 @@ impl Builder {
             line_data: LineData::new(),
             labels: HashMap::new(),
             next_label: 0,
-            contexts: Vec::new()
+            contexts: Vec::new(),
+            symbols: SymbolTable::new(),
         }
     }
 
@@ -131,7 +134,12 @@ impl Builder {
 
 impl StmtVisitor<BuilderResult> for Builder {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> BuilderResult {
-        unimplemented!();
+        let offset = self.symbols.get(name)?;
+        self.generate_expr(expr)?;
+
+        self.emit(name.line, Bytecode::STORE(offset));
+
+        Ok(())
     }
 
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> BuilderResult {
@@ -209,7 +217,10 @@ impl StmtVisitor<BuilderResult> for Builder {
     }
 
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> BuilderResult {
-        unimplemented!();
+        self.symbols.add_local(name);
+        self.generate_expr(expr)?;
+
+        Ok(())
     }
 
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> BuilderResult {
@@ -341,7 +352,11 @@ impl ExprVisitor<BuilderResult> for Builder {
     }
 
     fn visit_variable(&mut self, name: &Token) -> BuilderResult {
-        unimplemented!();
+        let offset = self.symbols.get(name)?;
+
+        self.emit(name.line, Bytecode::LOAD(offset));
+
+        Ok(())
     }
 
 }
