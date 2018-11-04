@@ -161,24 +161,8 @@ pub struct VecList {
 }
 
 impl VecList {
-    pub fn new () -> VecList {
-        VecList::from(Vec::new())
-    }
-
     pub fn from (vector : Vec<Value>) -> VecList {
         VecList { traced: Cell::new(false), values: RefCell::new(vector) }
-    }
-
-    pub fn push(&self, value: Value){
-        self.values.borrow_mut().push(value);
-    }
-
-    pub fn pop(&self) -> Option<Value> {
-        self.values.borrow_mut().pop()
-    }
-
-    pub fn len(&self) -> usize {
-        self.values.borrow().len()
     }
 
     pub fn get(&self, index: i64) -> Result<Value, &'static str> {
