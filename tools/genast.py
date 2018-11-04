@@ -22,7 +22,7 @@ AST = {
         [
             "Assignment -> name: Token, expr: Box<Expr>",
             "Block      -> body: Vec<Box<Stmt>>",
-            "Break      -> token: Token",
+            "Break      -> ",
             "Expression -> expr: Box<Expr>",
             "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>",
@@ -78,6 +78,8 @@ def parse_types(type_data):
         fields = []
 
         for field in field_data:
+            if not field:
+                continue
             name, datatype = field.split(':')
             fields.append((name.strip(), datatype.strip()))
 
@@ -117,7 +119,10 @@ def define_ast(basename, imports, type_data):
         for (classname, fields) in types:
             items = ", ".join(['{}: {}'.format(*field) for field in fields])
 
-            writer.writeln("{} {{ {} }},".format(classname, items))
+            if items:
+                writer.writeln("{} {{ {} }},".format(classname, items))
+            else:
+                writer.writeln("{},".format(classname))
 
         writer.end_block()
         writer.writeln()
@@ -128,8 +133,10 @@ def define_ast(basename, imports, type_data):
         for (classname, fields) in types:
             items = ", ".join(['{}: &{}'.format(*field) for field in fields])
             params = "(&mut self, )"
-
-            writer.writeln("fn visit_{}(&mut self, {}) -> T;".format(classname.lower(), items))
+            if items:
+                writer.writeln("fn visit_{}(&mut self, {}) -> T;".format(classname.lower(), items))
+            else:
+                writer.writeln("fn visit_{}(&mut self) -> T;".format(classname.lower()))
 
         writer.end_block()
         writer.writeln()
@@ -160,7 +167,12 @@ def define_ast(basename, imports, type_data):
             left_param = ", ".join(['{}'.format(fieldname) for (fieldname, _) in fields])
             right_param = ", ".join([fieldname for (fieldname, _) in fields])
 
-            writer.writeln("{0}Node::{1}{{{2}}} => visitor.visit_{3}({4}),".format(basename, classname, left_param, classname.lower(), right_param))
+            if left_param:
+                pattern = "{0}Node::{1}{{{2}}}".format(basename, classname, left_param)
+            else:
+                pattern = "{0}Node::{1}".format(basename, classname)
+
+            writer.writeln("{0} => visitor.visit_{1}({2}),".format(pattern, classname.lower(), right_param))
         writer.end_block()
         writer.end_block()
         writer.end_block()

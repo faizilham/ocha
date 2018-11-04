@@ -149,8 +149,8 @@ impl StmtVisitor<BuilderResult> for Builder {
         Ok(())
     }
 
-    fn visit_break(&mut self, token: &Token) -> BuilderResult {
-        let line = token.line;
+    fn visit_break(&mut self) -> BuilderResult {
+        let line = self.last_line;
         let label : Label;
 
         if let Some(Context::WhileCtx { end_label }) = self.get_context() {

@@ -10,7 +10,7 @@ pub struct Stmt {
 pub enum StmtNode {
     Assignment { name: Token, expr: Box<Expr> },
     Block { body: Vec<Box<Stmt>> },
-    Break { token: Token },
+    Break,
     Expression { expr: Box<Expr> },
     If { condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>> },
     Print { exprs: Vec<Box<Expr>> },
@@ -22,7 +22,7 @@ pub enum StmtNode {
 pub trait StmtVisitor<T> {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> T;
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> T;
-    fn visit_break(&mut self, token: &Token) -> T;
+    fn visit_break(&mut self) -> T;
     fn visit_expression(&mut self, expr: &Box<Expr>) -> T;
     fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> T;
     fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> T;
@@ -39,7 +39,7 @@ impl Stmt {
         match &stmt.node {
             StmtNode::Assignment{name, expr} => visitor.visit_assignment(name, expr),
             StmtNode::Block{body} => visitor.visit_block(body),
-            StmtNode::Break{token} => visitor.visit_break(token),
+            StmtNode::Break => visitor.visit_break(),
             StmtNode::Expression{expr} => visitor.visit_expression(expr),
             StmtNode::If{condition, true_branch, false_branch} => visitor.visit_if(condition, true_branch, false_branch),
             StmtNode::Print{exprs} => visitor.visit_print(exprs),

@@ -98,7 +98,7 @@ fn break_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     let token = parser.advance().unwrap();
     parser.expect(SEMICOLON, "Expect ';' after break")?;
 
-    Ok(create_stmt(token.line, StmtNode::Break { token }))
+    Ok(create_stmt(token.line, StmtNode::Break))
 }
 
 fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
