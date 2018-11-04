@@ -191,18 +191,14 @@ fn expression(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
 }
 
 fn ternary(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
-    // TODO: fix this bug
-    // 1 ? 2 : 3 ? 4 : 5 wont compile, but
-    // 1 ? 2 : (3 ? 4 : 5) compiles
-
     let mut expr = binary(parser, 0)?;
 
     if parser.matches(QUESTION) {
         let line = parser.last_line;
 
-        let true_branch = binary(parser, 0)?;
+        let true_branch = expression(parser)?;
         parser.expect(COLON, "Expect ':' after true branch expression")?;
-        let false_branch = binary(parser, 0)?;
+        let false_branch = expression(parser)?;
 
         expr = create_expr(line, ExprNode::Ternary{condition: expr, true_branch, false_branch});
     }
