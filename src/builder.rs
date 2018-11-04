@@ -22,11 +22,40 @@ enum Context {
     WhileCtx { end_label: Label },
 }
 
+struct Blocks {
+    main: Vec<Bytecode>,
+    functions: Vec<Vec<Bytecode>>,
+    literals: Vec<Literal>,
+    line_data: LineData,
+}
 
-struct Builder {
-    pub codes: Vec<Bytecode>,
-    pub literals: Vec<Literal>,
-    pub line_data: LineData,
+impl Blocks {
+    pub fn new () -> Blocks {
+        Blocks{
+            main: Vec::new(),
+            functions: Vec::new(),
+            literals: Vec::new(),
+            line_data: LineData::new(),
+        }
+    }
+
+    pub fn merge(&mut self) {
+        for func in self.functions.drain(..) {
+            self.main.extend(func);
+        }
+    }
+
+    pub fn into_chunk(mut self) -> Chunk {
+        self.merge();
+        let Blocks { main: codes, literals, line_data, .. } = self;
+        Chunk { codes, literals, line_data }
+    }
+}
+
+struct Builder<'a> {
+    codes: &'a mut Vec<Bytecode>,
+    literals: &'a mut Vec<Literal>,
+    line_data: &'a mut LineData,
     labels: HashMap<Label, Vec<(usize, BranchType)>>,
     next_label: Label,
     last_line: i32,
@@ -35,32 +64,37 @@ struct Builder {
 }
 
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, ()> {
-    let mut builder = Builder::new();
+    let mut blocks = Blocks::new();
+    {
+        let mut builder = Builder::new(&mut blocks);
 
-    for statement in statements {
-        if let Err(e) = builder.generate(&statement) {
-            e.print();
+        for statement in statements {
+            if let Err(e) = builder.generate(&statement) {
+                e.print();
+
+                return Err(());
+            }
         }
+
+        let line = builder.last_line;
+        builder.emit(line, Bytecode::HALT);
     }
 
-    let line = builder.last_line;
-    builder.emit(line, Bytecode::HALT);
-
-    let Builder { codes, literals, line_data, .. } = builder;
-    Ok(Chunk { codes, literals, line_data })
+    let chunk = blocks.into_chunk();
+    Ok(chunk)
 }
 
 type BuilderResult = Result<(), Exception>;
 
 
-impl Builder {
-    fn new () -> Builder {
+impl<'a> Builder<'a> {
+    fn new (blocks: &mut Blocks) -> Builder {
         Builder {
-            codes: Vec::new(),
-            literals: Vec::new(),
-            last_line: 0,
-            line_data: LineData::new(),
+            codes: &mut blocks.main,
+            literals: &mut blocks.literals,
+            line_data: &mut blocks.line_data,
             labels: HashMap::new(),
+            last_line: 0,
             next_label: 0,
             contexts: Vec::new(),
             symbols: SymbolTable::new(),
@@ -77,8 +111,12 @@ impl Builder {
         Expr::accept(expr, self)
     }
 
+    fn next_pos(&self) -> usize {
+        self.codes.len()
+    }
+
     fn emit(&mut self, line: i32, bytecode : Bytecode) -> usize {
-        let index = self.codes.len();
+        let index = self.next_pos();
         self.codes.push(bytecode);
 
         self.line_data.add(index, line);
@@ -132,7 +170,7 @@ impl Builder {
     }
 }
 
-impl StmtVisitor<BuilderResult> for Builder {
+impl<'a> StmtVisitor<BuilderResult> for Builder<'a> {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> BuilderResult {
         let offset = self.symbols.get(name)?;
         self.generate_expr(expr)?;
@@ -182,7 +220,7 @@ impl StmtVisitor<BuilderResult> for Builder {
 
         // generate true branch
         self.generate(true_branch)?;
-        let mut true_branch_finish = self.codes.len(); // instruction after the true branch
+        let mut true_branch_finish = self.next_pos(); // instruction after the true branch
 
 
         if let Some(false_branch) = false_branch {
@@ -191,7 +229,7 @@ impl StmtVisitor<BuilderResult> for Builder {
 
             self.generate(false_branch)?;
 
-            let false_branch_finish = self.codes.len(); // instruction after false branch
+            let false_branch_finish = self.next_pos(); // instruction after false branch
             self.replace(br_placeholder, Bytecode::BR(false_branch_finish));
         }
 
@@ -236,7 +274,7 @@ impl StmtVisitor<BuilderResult> for Builder {
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> BuilderResult {
         let line = self.last_line;
 
-        let while_start_pos = self.codes.len();
+        let while_start_pos = self.next_pos();
         let while_end = self.create_label();
 
         self.generate_expr(condition)?;
@@ -253,7 +291,7 @@ impl StmtVisitor<BuilderResult> for Builder {
 
         self.emit(line, Bytecode::BR(while_start_pos)); // br to top
 
-        let while_end_pos = self.codes.len();
+        let while_end_pos = self.next_pos();
         self.enclose_label(while_end, while_end_pos);
 
         Ok(())
@@ -261,7 +299,7 @@ impl StmtVisitor<BuilderResult> for Builder {
 
 }
 
-impl ExprVisitor<BuilderResult> for Builder {
+impl<'a> ExprVisitor<BuilderResult> for Builder<'a> {
     fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> BuilderResult {
         let line = self.last_line;
 
@@ -350,12 +388,12 @@ impl ExprVisitor<BuilderResult> for Builder {
         self.generate_expr(true_branch)?;
         let br_placeholder = self.placeholder(line); // add br between true & false branch
 
-        let true_branch_finish = self.codes.len(); // instruction after the true branch
+        let true_branch_finish = self.next_pos(); // instruction after the true branch
         self.replace(brf_placeholder, Bytecode::BRF(true_branch_finish));
 
         self.generate_expr(false_branch)?;
 
-        let false_branch_finish = self.codes.len(); // instruction after false branch
+        let false_branch_finish = self.next_pos(); // instruction after false branch
         self.replace(br_placeholder, Bytecode::BR(false_branch_finish));
 
         Ok(())
