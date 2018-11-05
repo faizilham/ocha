@@ -2,6 +2,7 @@ mod ast;
 mod builder;
 mod exception;
 mod heap;
+mod io;
 mod lexer;
 mod line_data;
 mod parser;
@@ -14,47 +15,23 @@ use std::fs::File;
 use std::io::prelude::*;
 
 use exception::Exception;
-use vm::VM;
-
-pub fn print_error(message : &str){
-    eprintln!("Error: {}", message);
-}
-
-fn print_exception(exception: Exception) -> () {
-    print_error(&exception.to_string());
-    ()
-}
-
-fn print_exceptions(exceptions: Vec<Exception>) -> () {
-    for e in exceptions {
-        print_exception(e);
-    }
-
-    ()
-}
+use vm::{VM, Chunk};
+use io::OchaIO;
 
 pub fn run_file(filename : String) -> Result<(), ()> {
-    let source = read_file(&filename)?;
+    let io =  OchaIO::stdio();
 
-    let chunk = parse_and_build(source).map_err(print_exceptions)?;
-
-    execute(chunk).map_err(print_exception)
+    run_file_with_io(filename, &io)
 }
 
-fn parse_and_build(source : String) -> Result<vm::Chunk, Vec<Exception>> {
-    let tokens = lexer::scan(source)?;
-    let statements = parser::parse(tokens)?;
+fn run_file_with_io(filename : String, io: &OchaIO) -> Result<(), ()> {
+    let source = read_file(&filename, io)?;
+    let chunk = parse_and_build(source).map_err(|e| report_exceptions(io, e))?;
 
-    builder::build(statements)
+    execute(chunk, &io).map_err(|e| report_exception(io, e))
 }
 
-fn execute(chunk: vm::Chunk) -> Result<(), Exception> {
-    let mut vm = VM::new(chunk);
-    vm.run()
-}
-
-
-fn read_file (filename : &String) -> Result<String, ()> {
+fn read_file (filename : &String, io: &OchaIO) -> Result<String, ()> {
     // open file
     let file = File::open(filename);
 
@@ -66,6 +43,35 @@ fn read_file (filename : &String) -> Result<String, ()> {
         }
     }
 
-    print_error(&format!("File '{}' not found", filename));
+    io.error(&format!("Error: File '{}' not found", filename));
     Err(())
 }
+
+fn parse_and_build(source : String) -> Result<Chunk, Vec<Exception>> {
+    let tokens = lexer::scan(source)?;
+    let statements = parser::parse(tokens)?;
+
+    builder::build(statements)
+}
+
+fn execute(chunk: Chunk, io: &OchaIO) -> Result<(), Exception> {
+    let mut vm = VM::new(chunk, io);
+    vm.run()
+}
+
+// Exception handlers
+fn report_exception(io: &OchaIO, exception: Exception) -> () {
+    io.error(&exception.to_string());
+    ()
+}
+
+fn report_exceptions(io: &OchaIO, exceptions: Vec<Exception>) -> () {
+    for e in exceptions {
+        report_exception(io, e);
+    }
+
+    ()
+}
+
+
+// TODO: integration test

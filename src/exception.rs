@@ -15,7 +15,7 @@ impl Exception {
 }
 
 fn error_message(line: i32, message: &str) -> String{
-    format!("{} [line {}]", message, line)
+    format!("Error: {} [line {}]", message, line)
 }
 
 pub fn report_error(line: i32, message: &str) -> String {
@@ -25,7 +25,3 @@ pub fn report_error(line: i32, message: &str) -> String {
         error_message(line, message)
     }
 }
-
-// pub fn print_error(message : &str){
-//     eprintln!("Error: {}", message);
-// }

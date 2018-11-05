@@ -11,8 +11,6 @@ fn main() {
     } else {
         if let Err(_) = ocha::run_file(args[1].clone()){
             process::exit(1);
-        }        
+        }
     }
-
-    
 }

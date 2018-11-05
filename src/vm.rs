@@ -1,6 +1,7 @@
 use exception::Exception;
 use exception::Exception::RuntimeErr;
 use heap::{Heap, Traceable, HeapPtr};
+use io::OchaIO;
 use line_data::LineData;
 use token::Literal;
 use value::{Value, OchaStr, VecList};
@@ -54,7 +55,7 @@ pub struct Chunk {
     pub line_data: LineData,
 }
 
-pub struct VM {
+pub struct VM<'io> {
     codes: Vec<Bytecode>,
     constants: Vec<Value>,
     stack: Vec<Value>,
@@ -62,13 +63,15 @@ pub struct VM {
     ip: usize,
     fp: isize,
     line_data: LineData,
-    max_objects: usize
+    max_objects: usize,
+
+    io: &'io OchaIO
 }
 
 const INITIAL_GC_THRESHOLD : usize = 50;
 
-impl VM {
-    pub fn new (chunk: Chunk) -> VM {
+impl<'io> VM<'io> {
+    pub fn new (chunk: Chunk, io: &'io OchaIO) -> VM {
         let Chunk { codes, mut literals, line_data } = chunk;
 
         let stack = Vec::with_capacity(256);
@@ -84,6 +87,8 @@ impl VM {
             ip: 0,
             fp: 0,
             max_objects: INITIAL_GC_THRESHOLD,
+
+            io
         };
 
         for literal in literals.drain(..) {
@@ -330,11 +335,10 @@ impl VM {
                     let values = self.stack.split_off(start);
 
                     for value in values {
-                        print!("{} ", value.to_string());
-
+                        self.io.write(&value.to_string());
                     }
 
-                    println!();
+                    self.io.writeln();
                 }
             };
         };
