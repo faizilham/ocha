@@ -128,10 +128,6 @@ impl<'a> Builder<'a> {
         index
     }
 
-    fn placeholder(&mut self, line: i32) -> usize {
-        self.emit(line, Bytecode::NOP)
-    }
-
     fn replace(&mut self, index: usize, bytecode: Bytecode) {
         if let Some(code) = self.codes.get_mut(index) {
             *code = bytecode;
@@ -150,13 +146,13 @@ impl<'a> Builder<'a> {
     }
 
     fn branch_placeholder(&mut self, line: i32, branch_type: BranchType, label: Label) {
-        let position = self.placeholder(line);
+        let position = self.emit(line, Bytecode::NOP);
         let branches = self.labels.get_mut(&label).unwrap();
 
         branches.push((position, branch_type));
     }
 
-    fn enclose_label(&mut self, label: Label, label_pos: usize) {
+    fn set_label_position(&mut self, label: Label, label_pos: usize) {
         let branches = self.labels.remove(&label).unwrap();
 
         for (br_pos, br_type) in branches {
@@ -220,24 +216,31 @@ impl<'a> StmtVisitor<BuilderResult> for Builder<'a> {
         // generate condition
         self.generate_expr(condition)?;
 
-        let brf_placeholder = self.placeholder(line); // placeholder brf to after true branch / else
+        let else_start_label = self.create_label();
+
+        // placeholder brf jump to after true branch (i.e. else case)
+        self.branch_placeholder(line, BranchType::BRF, else_start_label);
 
         // generate true branch
         self.generate(true_branch)?;
-        let mut true_branch_finish = self.next_pos(); // instruction after the true branch
+        let mut else_start_position = self.next_pos(); // instruction after the true branch
 
 
         if let Some(false_branch) = false_branch {
-            let br_placeholder = self.placeholder(line); // add br between true & false branch
-            true_branch_finish += 1;
+            let block_end_label = self.create_label();
+
+            // add br between true & false branch
+            self.branch_placeholder(line, BranchType::BR, block_end_label);
+
+            else_start_position += 1;
 
             self.generate(false_branch)?;
 
-            let false_branch_finish = self.next_pos(); // instruction after false branch
-            self.replace(br_placeholder, Bytecode::BR(false_branch_finish));
+            let block_end_position = self.next_pos(); // instruction after false branch
+            self.set_label_position(block_end_label, block_end_position)
         }
 
-        self.replace(brf_placeholder, Bytecode::BRF(true_branch_finish));
+        self.set_label_position(else_start_label, else_start_position);
 
         Ok(())
     }
@@ -296,7 +299,7 @@ impl<'a> StmtVisitor<BuilderResult> for Builder<'a> {
         self.emit(line, Bytecode::BR(while_start_pos)); // br to top
 
         let while_end_pos = self.next_pos();
-        self.enclose_label(while_end, while_end_pos);
+        self.set_label_position(while_end, while_end_pos);
 
         Ok(())
     }
@@ -386,19 +389,27 @@ impl<'a> ExprVisitor<BuilderResult> for Builder<'a> {
         // generate condition
         self.generate_expr(condition)?;
 
-        let brf_placeholder = self.placeholder(line); // placeholder brf to after true branch / else
+
+        let else_start_label = self.create_label();
+        let block_end_label = self.create_label();
+
+        // placeholder brf jumping to after true branch / else
+        self.branch_placeholder(line, BranchType::BRF, else_start_label);
 
         // generate true branch
         self.generate_expr(true_branch)?;
-        let br_placeholder = self.placeholder(line); // add br between true & false branch
 
-        let true_branch_finish = self.next_pos(); // instruction after the true branch
-        self.replace(brf_placeholder, Bytecode::BRF(true_branch_finish));
+        // add br between true & false branch, jumping to end of ternary
+        self.branch_placeholder(line, BranchType::BR, block_end_label);
+
+        let else_start_position = self.next_pos(); // instruction after the true branch
 
         self.generate_expr(false_branch)?;
 
-        let false_branch_finish = self.next_pos(); // instruction after false branch
-        self.replace(br_placeholder, Bytecode::BR(false_branch_finish));
+        let block_end_position = self.next_pos(); // instruction after false branch
+
+        self.set_label_position(else_start_label, else_start_position);
+        self.set_label_position(block_end_label, block_end_position);
 
         Ok(())
     }
