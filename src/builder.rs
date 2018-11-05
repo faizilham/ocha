@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ast::expr::{Expr, ExprNode, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
 use exception::Exception;
@@ -16,15 +14,83 @@ enum BranchType {
     BRF
 }
 
-type Label = i32;
+type BranchPlaceholder = (usize, BranchType); // (position, type)
+
+type Label = u32;
+
+struct LabelData {
+    position: usize,
+    placeholders: Vec<BranchPlaceholder>
+}
 
 enum Context {
     WhileCtx { end_label: Label },
 }
 
+struct SubProg {
+    codes: Vec<Bytecode>,
+    labels: Vec<LabelData>,
+    next_label: Label,
+}
+
+impl SubProg {
+    pub fn new() -> SubProg {
+        SubProg { codes: Vec::new(), labels: Vec::new(), next_label: 0 }
+    }
+
+    pub fn next_pos(&self) -> usize {
+        self.codes.len()
+    }
+
+    pub fn emit(&mut self, bytecode : Bytecode) -> usize {
+        let index = self.next_pos();
+        self.codes.push(bytecode);
+
+        index
+    }
+
+    pub fn create_label(&mut self) -> Label {
+        let label = self.next_label;
+        self.next_label += 1;
+
+        self.labels.push( LabelData{ position: 0, placeholders: Vec::new() } );
+
+        label
+    }
+
+    pub fn branch_placeholder(&mut self, branch_type: BranchType, label: Label) -> usize {
+        let position = self.emit(Bytecode::NOP);
+        let label_data = self.labels.get_mut(label as usize).unwrap();
+
+        label_data.placeholders.push((position, branch_type));
+
+        position
+    }
+
+    pub fn set_label_position(&mut self, label: Label, position: usize) {
+        let label_data = self.labels.get_mut(label as usize).unwrap();
+
+        label_data.position = position;
+    }
+
+    pub fn enclose_labels(&mut self) {
+        for LabelData { position, placeholders } in self.labels.drain(..) {
+            for (br_pos, br_type) in placeholders {
+                let bytecode = match br_type {
+                    BranchType::BR => Bytecode::BR(position),
+                    BranchType::BRF => Bytecode::BRF(position)
+                };
+
+                let code = self.codes.get_mut(br_pos).unwrap();
+                *code = bytecode;
+            }
+        }
+    }
+}
+
 struct Blocks {
-    main: Vec<Bytecode>,
-    functions: Vec<Vec<Bytecode>>,
+    main: SubProg,
+    functions: Vec<SubProg>,
     literals: Vec<Literal>,
     line_data: LineData,
 }
@@ -32,32 +98,40 @@ struct Blocks {
 impl Blocks {
     pub fn new () -> Blocks {
         Blocks{
-            main: Vec::new(),
+            main: SubProg::new(),
             functions: Vec::new(),
             literals: Vec::new(),
             line_data: LineData::new(),
         }
     }
 
-    pub fn merge(&mut self) {
-        for func in self.functions.drain(..) {
-            self.main.extend(func);
+    fn enclose_and_merge(mut main: SubProg, mut functions: Vec<SubProg>) -> Vec<Bytecode> {
+        main.enclose_labels();
+
+        let SubProg{ mut codes, .. } = main;
+
+        for mut subprog in functions.drain(..) {
+            subprog.enclose_labels();
+
+            codes.extend(subprog.codes);
         }
+
+        codes
     }
 
-    pub fn into_chunk(mut self) -> Chunk {
-        self.merge();
-        let Blocks { main: codes, literals, line_data, .. } = self;
+    pub fn into_chunk(self) -> Chunk {
+        let Blocks { main, functions, literals, line_data, .. } = self;
+
+        let codes = Blocks::enclose_and_merge(main, functions);
+
         Chunk { codes, literals, line_data }
     }
 }
 
 struct Builder<'a> {
-    codes: &'a mut Vec<Bytecode>,
+    current_subprog: &'a mut SubProg,
     literals: &'a mut Vec<Literal>,
     line_data: &'a mut LineData,
-    labels: HashMap<Label, Vec<(usize, BranchType)>>,
-    next_label: Label,
     last_line: i32,
     contexts: Vec<Context>,
     symbols: SymbolTable,
@@ -94,12 +168,10 @@ type BuilderResult = Result<(), Exception>;
 impl<'a> Builder<'a> {
     fn new (blocks: &mut Blocks) -> Builder {
         Builder {
-            codes: &mut blocks.main,
+            current_subprog: &mut blocks.main,
             literals: &mut blocks.literals,
             line_data: &mut blocks.line_data,
-            labels: HashMap::new(),
             last_line: 0,
-            next_label: 0,
             contexts: Vec::new(),
             symbols: SymbolTable::new(),
         }
@@ -116,53 +188,27 @@ impl<'a> Builder<'a> {
     }
 
     fn next_pos(&self) -> usize {
-        self.codes.len()
+        self.current_subprog.next_pos()
     }
 
     fn emit(&mut self, line: i32, bytecode : Bytecode) -> usize {
-        let index = self.next_pos();
-        self.codes.push(bytecode);
-
+        let index = self.current_subprog.emit(bytecode);
         self.line_data.add(index, line);
 
         index
     }
 
-    fn replace(&mut self, index: usize, bytecode: Bytecode) {
-        if let Some(code) = self.codes.get_mut(index) {
-            *code = bytecode;
-        } else {
-            unreachable!();
-        }
-    }
-
     fn create_label(&mut self) -> Label {
-        let label = self.next_label;
-        self.next_label += 1;
-
-        self.labels.insert(label, Vec::new());
-
-        label
+        self.current_subprog.create_label()
     }
 
     fn branch_placeholder(&mut self, line: i32, branch_type: BranchType, label: Label) {
-        let position = self.emit(line, Bytecode::NOP);
-        let branches = self.labels.get_mut(&label).unwrap();
-
-        branches.push((position, branch_type));
+        let index = self.current_subprog.branch_placeholder(branch_type, label);
+        self.line_data.add(index, line);
     }
 
-    fn set_label_position(&mut self, label: Label, label_pos: usize) {
-        let branches = self.labels.remove(&label).unwrap();
-
-        for (br_pos, br_type) in branches {
-            let bytecode = match br_type {
-                BranchType::BR => Bytecode::BR(label_pos),
-                BranchType::BRF => Bytecode::BRF(label_pos)
-            };
-
-            self.replace(br_pos, bytecode);
-        }
+    fn set_label_position(&mut self, label: Label, position: usize) {
+        self.current_subprog.set_label_position(label, position);
     }
 
     fn get_context(&self) -> Option<&Context> {
