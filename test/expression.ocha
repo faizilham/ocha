@@ -1,0 +1,18 @@
+print("OK");                        // OK
+print(0);                           // 0
+print(nil);                         // nil
+print(true);                        // true
+print(false);                       // false
+
+print(1 + 1);                       // 2
+print(2 * 3);                       // 6
+print(2 - 6);                       // -4
+print(1.0 / -2);                    // -0.5
+
+print(1 < 2);                       // true
+print(1 > 10);                      // false
+print(2 <= 2);                      // true
+print(!(1 >= 10));                  // true
+print("test" == "test");            // true
+print(1 != nil);                    // true
+print(1 < 2 ? "a" : "b");           // a

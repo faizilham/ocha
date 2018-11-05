@@ -1,0 +1,28 @@
+let total = 0;
+let i = 0;
+
+while (i < 100) {
+    i = i + 1;
+    total = total + i;
+}
+
+print(total);                   // 5050
+
+let str = "";
+i = 0;
+let j;
+
+while (i < 2) {
+    j = 0;
+    str = str + "a";
+    while (j < 100) {
+        str = str + "b";
+        j = j + 1;
+        if (j == 2) {
+            break;
+        }
+    }
+    i = i + 1;
+}
+
+print(str);                     // abbabb

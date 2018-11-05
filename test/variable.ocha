@@ -1,0 +1,8 @@
+let a = "test";
+
+print(a);               // test
+
+let b = 10;
+a = a + b;
+
+print(a);               // test10

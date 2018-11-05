@@ -67,13 +67,13 @@ pub struct VM<'io> {
     line_data: LineData,
     max_objects: usize,
 
-    io: &'io OchaIO
+    io: &'io mut OchaIO
 }
 
 const INITIAL_GC_THRESHOLD : usize = 50;
 
 impl<'io> VM<'io> {
-    pub fn new (chunk: Chunk, io: &'io OchaIO) -> VM {
+    pub fn new (chunk: Chunk, io: &'io mut OchaIO) -> VM {
         let Chunk { codes, mut literals, line_data } = chunk;
 
         let stack = Vec::with_capacity(256);
