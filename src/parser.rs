@@ -21,13 +21,13 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, Vec<Exception>> {
 
     let mut errors = Vec::new();
 
-    while !parser.matches(EOF) {
+    while !parser.at_end() {
         let stmt = declaration(&mut parser);
         match stmt {
             Ok(stmt) => statements.push(stmt),
             Err(exception) => {
                 errors.push(exception);
-                // TODO: include error synchronization here
+                synchronize(&mut parser);
             }
         };
     }
@@ -37,6 +37,38 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, Vec<Exception>> {
     } else {
         Err(errors)
     }
+}
+
+fn synchronize(parser: &mut ParserState) {
+    match sync(parser) {
+        _ => () // do nothing
+    }
+}
+
+fn sync(parser: &mut ParserState) -> Result<(), ()>{
+    let mut previous = parser.advance().ok_or(())?;
+
+    while !parser.at_end() {
+        if previous.token_type == SEMICOLON {
+            return Ok(());
+        }
+
+        {
+            let current = parser.peek().ok_or(())?;
+
+            match current.token_type {
+                FN | LET | IF | WHILE | PRINT | RETURN => {
+                    return Ok(());
+                }
+
+                _ => (),
+            }
+        }
+
+        previous = parser.advance().ok_or(())?;
+    }
+
+    Ok(())
 }
 
 // statement parsing
@@ -297,7 +329,7 @@ impl ParserState {
     }
 
     fn at_end(&self) -> bool{
-        self.tokens.len() == 0
+        self.tokens.len() == 0 || self.peek_eq(EOF)
     }
 
     fn peek(&self) -> Option<&Token>{
