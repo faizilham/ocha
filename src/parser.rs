@@ -71,16 +71,20 @@ fn sync(parser: &mut ParserState) -> Result<(), ()>{
     Ok(())
 }
 
+type StmtResult = Result<Box<Stmt>, Exception>;
+
 // statement parsing
-fn declaration(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+fn declaration(parser: &mut ParserState) -> StmtResult {
     if parser.matches(LET) {
         var_declaration(parser)
+    } else if parser.matches(FN) {
+        func_declaration(parser)
     } else {
         statement(parser)
     }
 }
 
-fn var_declaration(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+fn var_declaration(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
 
     let name = parser.expect(IDENTIFIER, "Expect identifier name")?;
@@ -96,7 +100,37 @@ fn var_declaration(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     Ok(create_stmt(line, StmtNode::VarDecl { name, expr }))
 }
 
-fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+fn func_declaration(parser: &mut ParserState) -> StmtResult {
+    let line = parser.last_line;
+
+    let name = parser.expect(IDENTIFIER, "Expect function name")?;
+
+    parser.expect(LEFT_PAREN, "Expect '(' after function name")?;
+
+
+    // read args
+    let mut args = Vec::new();
+
+    while !parser.at_end() && !parser.peek_eq(RIGHT_PAREN) {
+        let token = parser.expect(IDENTIFIER, "Expect parameter name")?;
+        args.push(token);
+
+        if !parser.matches(COMMA) {
+            break;
+        }
+    }
+
+    parser.expect(RIGHT_PAREN, "Expect ')' after params")?;
+
+    // read body
+    parser.expect(LEFT_BRACE, "Expect '{' after function signature")?;
+
+    let body = read_block(parser)?;
+
+    Ok(create_stmt(line, StmtNode::FuncDecl { name, args, body }))
+}
+
+fn statement(parser: &mut ParserState) -> StmtResult {
     if parser.matches(LEFT_BRACE) {
         block(parser)
     } else if parser.matches(PRINT) {
@@ -112,8 +146,7 @@ fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     }
 }
 
-fn block(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
-    let line = parser.last_line;
+fn read_block(parser: &mut ParserState) -> Result<Vec<Box<Stmt>>, Exception> {
     let mut body : Vec<Box<Stmt>> = Vec::new();
 
     while !parser.at_end() && !parser.peek_eq(RIGHT_BRACE) {
@@ -122,17 +155,24 @@ fn block(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
 
     parser.expect(RIGHT_BRACE, "Expect '}' at the end of block")?;
 
+    Ok(body)
+}
+
+fn block(parser: &mut ParserState) -> StmtResult {
+    let line = parser.last_line;
+    let body = read_block(parser)?;
+
     Ok(create_stmt(line, StmtNode::Block { body }))
 }
 
-fn break_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+fn break_statement(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
     parser.expect(SEMICOLON, "Expect ';' after break")?;
 
     Ok(create_stmt(line, StmtNode::Break))
 }
 
-fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+fn expr_statement(parser: &mut ParserState) -> StmtResult {
     let expr = expression(parser)?;
 
     if parser.matches(EQUAL) {
@@ -144,7 +184,7 @@ fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     Ok(create_stmt(semicolon.line, StmtNode::Expression { expr }))
 }
 
-fn assignment(parser: &mut ParserState, variable: Box<Expr>) -> Result<Box<Stmt>, Exception> {
+fn assignment(parser: &mut ParserState, variable: Box<Expr>) -> StmtResult {
     let line = parser.last_line;
 
     let expr = expression(parser)?;
@@ -157,7 +197,7 @@ fn assignment(parser: &mut ParserState, variable: Box<Expr>) -> Result<Box<Stmt>
     }
 }
 
-fn if_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+fn if_statement(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
 
     parser.expect(LEFT_PAREN, "Expect '(' after 'if'")?;
@@ -175,7 +215,7 @@ fn if_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     Ok(create_stmt(line, StmtNode::If { condition, true_branch, false_branch }))
 }
 
-fn while_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+fn while_statement(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
 
     parser.expect(LEFT_PAREN, "Expect '(' after 'while'")?;
@@ -186,7 +226,7 @@ fn while_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
     Ok(create_stmt(line, StmtNode::While { condition, body }))
 }
 
-fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
+fn print_statement(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
 
     parser.expect(LEFT_PAREN, "Expect '(' after 'print'")?;
@@ -211,11 +251,13 @@ fn print_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
 
 // expression parsing
 
-fn expression(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
+type ExprResult = Result<Box<Expr>, Exception>;
+
+fn expression(parser: &mut ParserState) -> ExprResult {
     ternary(parser)
 }
 
-fn ternary(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
+fn ternary(parser: &mut ParserState) -> ExprResult {
     let mut expr = binary(parser, 0)?;
 
     if parser.matches(QUESTION) {
@@ -231,7 +273,7 @@ fn ternary(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
     Ok(expr)
 }
 
-fn binary(parser: &mut ParserState, precedence: usize) -> Result<Box<Expr>, Exception>{
+fn binary(parser: &mut ParserState, precedence: usize) -> ExprResult {
     if precedence >= BINARY_PRECEDENCE.len() {
         return unary(parser);
     }
@@ -246,7 +288,7 @@ fn binary(parser: &mut ParserState, precedence: usize) -> Result<Box<Expr>, Exce
     Ok(expr)
 }
 
-fn unary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
+fn unary(parser: &mut ParserState) -> ExprResult {
     if let Some(operator) = parser.match_all(&[BANG, MINUS]) {
         let expr = unary(parser)?;
         Ok(create_expr(operator.line, ExprNode::Unary{operator, expr}))
@@ -255,19 +297,46 @@ fn unary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
     }
 }
 
-fn call(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
+fn call(parser: &mut ParserState) -> ExprResult {
     let mut expr = primary(parser)?;
 
-    while let Some(operator) = parser.get_matches(LEFT_SQUARE) {
-        let member = expression(parser)?;
-        parser.expect(RIGHT_SQUARE, "Expect ']")?;
-        expr = create_expr(operator.line, ExprNode::Get {variable: expr, operator, member});
+    while let Some(operator) = parser.match_all(&[LEFT_SQUARE, LEFT_PAREN]) {
+        expr = match operator.token_type {
+            LEFT_SQUARE => finish_get(parser, expr, operator)?,
+            LEFT_PAREN => finish_fncall(parser, expr)?,
+            _ => unreachable!(),
+        };
     }
 
     Ok(expr)
 }
 
-fn primary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
+fn finish_fncall(parser: &mut ParserState, callee: Box<Expr>) -> ExprResult {
+    let line = parser.last_line;
+    let mut args = Vec::new();
+
+    while !parser.at_end() && !parser.peek_eq(RIGHT_PAREN) {
+        let expr = expression(parser)?;
+        args.push(expr);
+
+        if !parser.matches(COMMA) {
+            break;
+        }
+    }
+
+    parser.expect(RIGHT_PAREN, "Expect ')' after function call")?;
+
+
+    Ok(create_expr(line, ExprNode::FuncCall{ callee, args }))
+}
+
+fn finish_get(parser: &mut ParserState, callee: Box<Expr>, operator: Token) -> ExprResult {
+    let member = expression(parser)?;
+    parser.expect(RIGHT_SQUARE, "Expect ']")?;
+    Ok(create_expr(operator.line, ExprNode::Get {callee, operator, member}))
+}
+
+fn primary(parser: &mut ParserState) -> ExprResult {
     let token = parser.expect_advance("Expect expression")?;
 
     let expr = match token.token_type {
@@ -281,7 +350,7 @@ fn primary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
     Ok(expr)
 }
 
-fn grouping(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
+fn grouping(parser: &mut ParserState) -> ExprResult {
     let line = parser.last_line;
 
     let expr = expression(parser)?;
@@ -290,7 +359,7 @@ fn grouping(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
     Ok(create_expr(line, ExprNode::Grouping{expr}))
 }
 
-fn list_init(parser: &mut ParserState) -> Result<Box<Expr>, Exception> {
+fn list_init(parser: &mut ParserState) -> ExprResult {
     let line = parser.last_line;
 
     let mut exprs : Vec<Box<Expr>> = Vec::new();

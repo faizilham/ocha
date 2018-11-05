@@ -5,9 +5,9 @@ AST = {
     "Expr": (
         [ "token::Token", "token::Literal"],
         [
-
             "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
-            "Get        -> variable: Box<Expr>, operator: Token, member: Box<Expr>",
+            "FuncCall   -> callee: Box<Expr>, args: Vec<Box<Expr>>",
+            "Get        -> callee: Box<Expr>, operator: Token, member: Box<Expr>",
             "Grouping   -> expr: Box<Expr>",
             "Literal    -> value: Literal",
             "ListInit   -> exprs: Vec<Box<Expr>>",
@@ -24,6 +24,7 @@ AST = {
             "Block      -> body: Vec<Box<Stmt>>",
             "Break      -> ",
             "Expression -> expr: Box<Expr>",
+            "FuncDecl   -> name: Token, args: Vec<Token>, body: Vec<Box<Stmt>>",
             "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>",
             "Set        -> get_expr: Box<Expr>, expr: Box<Expr>",

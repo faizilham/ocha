@@ -9,7 +9,8 @@ pub struct Expr {
 #[derive(Debug)]
 pub enum ExprNode {
     Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
-    Get { variable: Box<Expr>, operator: Token, member: Box<Expr> },
+    FuncCall { callee: Box<Expr>, args: Vec<Box<Expr>> },
+    Get { callee: Box<Expr>, operator: Token, member: Box<Expr> },
     Grouping { expr: Box<Expr> },
     Literal { value: Literal },
     ListInit { exprs: Vec<Box<Expr>> },
@@ -20,7 +21,8 @@ pub enum ExprNode {
 
 pub trait ExprVisitor<T> {
     fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> T;
-    fn visit_get(&mut self, variable: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> T;
+    fn visit_funccall(&mut self, callee: &Box<Expr>, args: &Vec<Box<Expr>>) -> T;
+    fn visit_get(&mut self, callee: &Box<Expr>, operator: &Token, member: &Box<Expr>) -> T;
     fn visit_grouping(&mut self, expr: &Box<Expr>) -> T;
     fn visit_literal(&mut self, value: &Literal) -> T;
     fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> T;
@@ -36,7 +38,8 @@ impl Expr {
     pub fn accept<T, Visitor: ExprVisitor<T>>(expr: &Box<Expr>, visitor: &mut Visitor) -> T {
         match &expr.node {
             ExprNode::Binary{left, operator, right} => visitor.visit_binary(left, operator, right),
-            ExprNode::Get{variable, operator, member} => visitor.visit_get(variable, operator, member),
+            ExprNode::FuncCall{callee, args} => visitor.visit_funccall(callee, args),
+            ExprNode::Get{callee, operator, member} => visitor.visit_get(callee, operator, member),
             ExprNode::Grouping{expr} => visitor.visit_grouping(expr),
             ExprNode::Literal{value} => visitor.visit_literal(value),
             ExprNode::ListInit{exprs} => visitor.visit_listinit(exprs),

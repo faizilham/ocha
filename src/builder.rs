@@ -1,3 +1,6 @@
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use ast::expr::{Expr, ExprNode, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
 use exception::Exception;
@@ -33,7 +36,13 @@ struct SubProg {
     next_label: Label,
 }
 
+type SubProgRef = Rc<RefCell<SubProg>>;
+
 impl SubProg {
+    pub fn new_ref() -> SubProgRef {
+        Rc::new(RefCell::new(SubProg::new()))
+    }
+
     pub fn new() -> SubProg {
         SubProg { codes: Vec::new(), labels: Vec::new(), next_label: 0 }
     }
@@ -89,57 +98,59 @@ impl SubProg {
 }
 
 struct Blocks {
-    main: SubProg,
-    functions: Vec<SubProg>,
-    literals: Vec<Literal>,
-    line_data: LineData,
+    subprograms: Vec<SubProgRef>
 }
 
 impl Blocks {
     pub fn new () -> Blocks {
         Blocks{
-            main: SubProg::new(),
-            functions: Vec::new(),
-            literals: Vec::new(),
-            line_data: LineData::new(),
+            subprograms: vec![ SubProg::new_ref() ]
         }
     }
 
-    fn enclose_and_merge(mut main: SubProg, mut functions: Vec<SubProg>) -> Vec<Bytecode> {
-        main.enclose_labels();
+    fn enclose_and_merge(self) -> Vec<Bytecode> {
+        let Blocks { mut subprograms } = self;
+        let mut codes = Vec::new();
 
-        let SubProg{ mut codes, .. } = main;
+        for rf in subprograms.drain(..) {
+            let mut sub = rf.borrow_mut();
+            sub.enclose_labels();
 
-        for mut subprog in functions.drain(..) {
-            subprog.enclose_labels();
-
-            codes.extend(subprog.codes);
+            codes.extend(&sub.codes);
         }
 
         codes
     }
 
-    pub fn into_chunk(self) -> Chunk {
-        let Blocks { main, functions, literals, line_data, .. } = self;
+    pub fn main(&self) -> SubProgRef {
+        self.subprograms.get(0).unwrap().clone()
+    }
 
-        let codes = Blocks::enclose_and_merge(main, functions);
+    pub fn create_sub(&mut self) -> SubProgRef {
+        let last = self.subprograms.len() - 1;
 
-        Chunk { codes, literals, line_data }
+        self.subprograms.push(SubProg::new_ref());
+
+        self.subprograms.get(last).unwrap().clone()
     }
 }
 
 struct Builder<'a> {
-    current_subprog: &'a mut SubProg,
-    literals: &'a mut Vec<Literal>,
-    line_data: &'a mut LineData,
+    blocks: &'a mut Blocks,
+    current_subprog: SubProgRef,
+    literals: Vec<Literal>,
+
+    line_data: LineData,
     last_line: i32,
+
     contexts: Vec<Context>,
     symbols: SymbolTable,
 }
 
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
     let mut blocks = Blocks::new();
-    {
+
+    let Builder{literals, line_data, ..} = {
         let mut builder = Builder::new(&mut blocks);
 
         let mut errors = Vec::new();
@@ -156,9 +167,13 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
 
         let line = builder.last_line;
         builder.emit(line, Bytecode::HALT);
-    }
 
-    let chunk = blocks.into_chunk();
+        builder
+    };
+
+    let codes = blocks.enclose_and_merge();
+
+    let chunk = Chunk { codes, literals, line_data };
     Ok(chunk)
 }
 
@@ -167,10 +182,13 @@ type BuilderResult = Result<(), Exception>;
 
 impl<'a> Builder<'a> {
     fn new (blocks: &mut Blocks) -> Builder {
+        let current_subprog = blocks.main();
+
         Builder {
-            current_subprog: &mut blocks.main,
-            literals: &mut blocks.literals,
-            line_data: &mut blocks.line_data,
+            blocks: blocks,
+            current_subprog,
+            literals: Vec::new(),
+            line_data: LineData::new(),
             last_line: 0,
             contexts: Vec::new(),
             symbols: SymbolTable::new(),
@@ -188,27 +206,27 @@ impl<'a> Builder<'a> {
     }
 
     fn next_pos(&self) -> usize {
-        self.current_subprog.next_pos()
+        self.current_subprog.borrow().next_pos()
     }
 
     fn emit(&mut self, line: i32, bytecode : Bytecode) -> usize {
-        let index = self.current_subprog.emit(bytecode);
+        let index = self.current_subprog.borrow_mut().emit(bytecode);
         self.line_data.add(index, line);
 
         index
     }
 
     fn create_label(&mut self) -> Label {
-        self.current_subprog.create_label()
+        self.current_subprog.borrow_mut().create_label()
     }
 
     fn branch_placeholder(&mut self, line: i32, branch_type: BranchType, label: Label) {
-        let index = self.current_subprog.branch_placeholder(branch_type, label);
+        let index = self.current_subprog.borrow_mut().branch_placeholder(branch_type, label);
         self.line_data.add(index, line);
     }
 
     fn set_label_position(&mut self, label: Label, position: usize) {
-        self.current_subprog.set_label_position(label, position);
+        self.current_subprog.borrow_mut().set_label_position(label, position);
     }
 
     fn get_context(&self) -> Option<&Context> {
@@ -254,6 +272,12 @@ impl<'a> StmtVisitor<BuilderResult> for Builder<'a> {
         self.emit(line, Bytecode::POP);
 
         Ok(())
+    }
+
+    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>) -> BuilderResult {
+        let current = self.current_subprog.clone();
+
+        unimplemented!();
     }
 
     fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> BuilderResult {
@@ -304,9 +328,9 @@ impl<'a> StmtVisitor<BuilderResult> for Builder<'a> {
     }
 
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> BuilderResult {
-        if let ExprNode::Get {variable, operator, member } = &get_expr.node {
+        if let ExprNode::Get {callee, operator, member } = &get_expr.node {
             self.generate_expr(expr)?;
-            self.generate_expr(variable)?;
+            self.generate_expr(callee)?;
             self.generate_expr(member)?;
 
             self.emit(operator.line, Bytecode::SET_LIST);
@@ -377,10 +401,14 @@ impl<'a> ExprVisitor<BuilderResult> for Builder<'a> {
         Ok(())
     }
 
-    fn visit_get(&mut self, variable: &Box<Expr>, _: &Token, member: &Box<Expr>) -> BuilderResult {
+    fn visit_funccall(&mut self, callee: &Box<Expr>, args: &Vec<Box<Expr>>) -> BuilderResult {
+        unimplemented!();
+    }
+
+    fn visit_get(&mut self, callee: &Box<Expr>, _: &Token, member: &Box<Expr>) -> BuilderResult {
         let line = self.last_line;
 
-        self.generate_expr(variable)?;
+        self.generate_expr(callee)?;
         self.generate_expr(member)?;
 
         self.emit(line, Bytecode::GET_LIST);

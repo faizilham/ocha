@@ -12,6 +12,7 @@ pub enum StmtNode {
     Block { body: Vec<Box<Stmt>> },
     Break,
     Expression { expr: Box<Expr> },
+    FuncDecl { name: Token, args: Vec<Token>, body: Vec<Box<Stmt>> },
     If { condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>> },
     Print { exprs: Vec<Box<Expr>> },
     Set { get_expr: Box<Expr>, expr: Box<Expr> },
@@ -24,6 +25,7 @@ pub trait StmtVisitor<T> {
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> T;
     fn visit_break(&mut self) -> T;
     fn visit_expression(&mut self, expr: &Box<Expr>) -> T;
+    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>) -> T;
     fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> T;
     fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> T;
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> T;
@@ -41,6 +43,7 @@ impl Stmt {
             StmtNode::Block{body} => visitor.visit_block(body),
             StmtNode::Break => visitor.visit_break(),
             StmtNode::Expression{expr} => visitor.visit_expression(expr),
+            StmtNode::FuncDecl{name, args, body} => visitor.visit_funcdecl(name, args, body),
             StmtNode::If{condition, true_branch, false_branch} => visitor.visit_if(condition, true_branch, false_branch),
             StmtNode::Print{exprs} => visitor.visit_print(exprs),
             StmtNode::Set{get_expr, expr} => visitor.visit_set(get_expr, expr),
