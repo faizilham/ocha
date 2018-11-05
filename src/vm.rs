@@ -1,4 +1,5 @@
-use exception::report_error;
+use exception::Exception;
+use exception::Exception::RuntimeErr;
 use heap::{Heap, Traceable, HeapPtr};
 use line_data::LineData;
 use token::Literal;
@@ -100,13 +101,17 @@ impl VM {
         vm
     }
 
-    pub fn run(&mut self) {
-        if let Err(e) = self.run_loop() {
+    pub fn run(&mut self) -> Result<(), Exception> {
+        let result = self.run_loop().map_err(|message| {
             let last = self.ip - 1;
-            report_error(self.line_data.get_line(last), e);
-        }
+            let line = self.line_data.get_line(last);
 
-        self.cleanup()
+            RuntimeErr(line, String::from(message))
+        });
+
+        self.cleanup();
+
+        result
     }
 
     fn run_loop(&mut self) -> Result<(), &'static str> {

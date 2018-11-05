@@ -4,25 +4,25 @@ use token::{Token, TokenType};
 use token::TokenType::*;
 use token::Literal;
 
-pub fn scan(source_string : String) -> Result<Vec<Token>, ()> {
+pub fn scan(source_string : String) -> Result<Vec<Token>, Vec<Exception>> {
     let mut tokens = Vec::new();
     let mut lexer = LexerState::new(&source_string);
-    let mut has_error = false;
+
+    let mut errors = Vec::new();
 
     while !lexer.at_end() {
         match scan_token(&mut lexer) {
             Ok(token) => tokens.push(token),
             Err(exception) => {
-                exception.print();
-                has_error = true;
+                errors.push(exception)
             }
         }
     }
 
-    if !has_error {
+    if errors.len() == 0 {
         Ok(tokens)
     } else {
-        Err(())
+        Err(errors)
     }
 }
 

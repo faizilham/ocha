@@ -14,29 +14,28 @@ static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
     [SLASH, STAR, EOF, EOF]
 ];
 
-pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, ()> {
+pub fn parse(tokens: Vec<Token>) -> Result<Vec<Box<Stmt>>, Vec<Exception>> {
     let mut parser = ParserState::new(tokens);
 
     let mut statements : Vec<Box<Stmt>> = Vec::new();
 
-    let mut has_error = false;
+    let mut errors = Vec::new();
 
     while !parser.matches(EOF) {
         let stmt = declaration(&mut parser);
         match stmt {
             Ok(stmt) => statements.push(stmt),
             Err(exception) => {
-                exception.print();
-                has_error = true;
-                // include error synchronization here
+                errors.push(exception);
+                // TODO: include error synchronization here
             }
         };
     }
 
-    if !has_error {
+    if errors.len() == 0 {
         Ok(statements)
     } else {
-        Err(())
+        Err(errors)
     }
 }
 
@@ -74,7 +73,7 @@ fn statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
         if_statement(parser)
     } else if parser.matches(WHILE) {
         while_statement(parser)
-    } else if parser.peek_eq(BREAK){
+    } else if parser.matches(BREAK){
         break_statement(parser)
     } else {
         expr_statement(parser)
@@ -95,10 +94,10 @@ fn block(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
 }
 
 fn break_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
-    let token = parser.advance().unwrap();
+    let line = parser.last_line;
     parser.expect(SEMICOLON, "Expect ';' after break")?;
 
-    Ok(create_stmt(token.line, StmtNode::Break))
+    Ok(create_stmt(line, StmtNode::Break))
 }
 
 fn expr_statement(parser: &mut ParserState) -> Result<Box<Stmt>, Exception> {
@@ -237,7 +236,8 @@ fn call(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
 }
 
 fn primary(parser: &mut ParserState) -> Result<Box<Expr>, Exception>{
-    let token = parser.advance().unwrap();
+    let token = parser.expect_advance("Expect expression")?;
+
     let expr = match token.token_type {
         NUMBER | NIL | TRUE | FALSE | STRING => create_expr(token.line, ExprNode::Literal { value: token.literal }),
         IDENTIFIER => create_expr(token.line, ExprNode::Variable{name: token}),
@@ -320,6 +320,14 @@ impl ParserState {
             Some(token)
         } else {
             None
+        }
+    }
+
+    fn expect_advance(&mut self, message: &str) -> Result<Token, Exception> {
+        if let Some(token) = self.advance() {
+            Ok(token)
+        } else {
+            Err(self.exception(message))
         }
     }
 

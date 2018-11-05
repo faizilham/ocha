@@ -63,17 +63,21 @@ struct Builder<'a> {
     symbols: SymbolTable,
 }
 
-pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, ()> {
+pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
     let mut blocks = Blocks::new();
     {
         let mut builder = Builder::new(&mut blocks);
 
+        let mut errors = Vec::new();
+
         for statement in statements {
             if let Err(e) = builder.generate(&statement) {
-                e.print();
-
-                return Err(());
+                errors.push(e);
             }
+        }
+
+        if errors.len() > 0 {
+            return Err(errors);
         }
 
         let line = builder.last_line;

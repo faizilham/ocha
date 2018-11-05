@@ -6,12 +6,11 @@ pub enum Exception {
 use self::Exception::*;
 
 impl Exception {
-    pub fn print(&self) {
+    pub fn to_string(&self) -> String {
         match self {
             ParseErr(line, message) => report_error(*line, message),
             RuntimeErr(line, message) => report_error(*line, message),
-            _ => ()
-        };
+        }
     }
 }
 
@@ -19,14 +18,14 @@ fn error_message(line: i32, message: &str) -> String{
     format!("{} [line {}]", message, line)
 }
 
-pub fn report_error(line: i32, message: &str){
+pub fn report_error(line: i32, message: &str) -> String {
     if line < 0 {
-        print_error(message);
+        String::from(message)
     } else {
-        print_error(error_message(line, message).as_str());
+        error_message(line, message)
     }
 }
 
-pub fn print_error(message : &str){
-    eprintln!("Error: {}", message);
-}
+// pub fn print_error(message : &str){
+//     eprintln!("Error: {}", message);
+// }
