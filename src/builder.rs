@@ -98,12 +98,14 @@ impl Block {
         label_data.position = position;
     }
 
-    pub fn enclose_labels(&mut self) {
+    pub fn enclose_labels(&mut self, offset: usize) {
         for LabelData { position, placeholders } in self.labels.drain(..) {
+            let absolute_position = position + offset;
+
             for (br_pos, br_type) in placeholders {
                 let bytecode = match br_type {
-                    BranchType::BR => Bytecode::BR(position),
-                    BranchType::BRF => Bytecode::BRF(position)
+                    BranchType::BR => Bytecode::BR(absolute_position),
+                    BranchType::BRF => Bytecode::BRF(absolute_position)
                 };
 
                 let code = self.codes.get_mut(br_pos).unwrap();
@@ -130,7 +132,7 @@ fn enclose_and_merge(mut blocks : Vec<BlockRef>) -> Vec<Bytecode> {
 
     for rf in blocks.drain(..) {
         let mut sub = rf.borrow_mut();
-        sub.enclose_labels();
+        sub.enclose_labels(codes.len());
 
         codes.extend(&sub.codes);
     }
