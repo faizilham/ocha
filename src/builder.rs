@@ -162,7 +162,7 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
 
     let codes = enclose_and_merge(blocks);
 
-    println!("{:?}", &codes);
+    println!("{:?}", &codes); // TODO: remove this
 
     let chunk = Chunk { codes, literals, line_data };
     Ok(chunk)

@@ -78,6 +78,73 @@ fn report_exceptions(io: &mut OchaIO, exceptions: Vec<Exception>) -> () {
 // integration test
 #[cfg(test)]
 mod test {
+
+    #[test]
+    fn test_expression() {
+        test("expression");
+    }
+
+    #[test]
+    fn test_variable() {
+        test("variable");
+    }
+
+    #[test]
+    fn test_list() {
+        test("list");
+    }
+
+    #[test]
+    fn test_condition() {
+        test("condition");
+    }
+
+    #[test]
+    fn test_loop() {
+        test("loop");
+    }
+
+    // test helper funcitons
+    use super::run_file_with_io;
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    fn read_output(filename: String) -> Vec<String> {
+        let file = File::open(filename).unwrap();
+
+        let mut result = Vec::new();
+
+        for line in BufReader::new(file).lines() {
+            result.push(String::from(line.unwrap()));
+        }
+
+        result
+    }
+
+    fn run_test(filename: String) -> (Result<(), ()>, MockIO) {
+        let mut io = MockIO::new();
+
+        let result = run_file_with_io(filename, &mut io);
+
+        (result, io)
+    }
+
+    fn test(testname: &str) {
+        let out_file = format!("test/{}.out", testname);
+        let ocha_file = format!("test/{}.ocha", testname);
+
+        let expected = read_output(out_file);
+
+        let (result, io) = run_test(ocha_file);
+
+        assert_eq!(result, Ok(()));
+
+        let MockIO { out, .. } = io;
+
+        assert_eq!(out, expected);
+    }
+
+    // Mock IO object
     use io::OchaIO;
 
     pub struct MockIO {
@@ -120,70 +187,5 @@ mod test {
         fn error(&mut self, err: &str) {
             self.err.push(String::from(err));
         }
-    }
-
-    use super::run_file_with_io;
-
-    use std::fs::File;
-    use std::io::{BufRead, BufReader};
-
-    fn read_output(filename: String) -> Vec<String> {
-        let file = File::open(filename).unwrap();
-
-        let mut result = Vec::new();
-
-        for line in BufReader::new(file).lines() {
-            result.push(String::from(line.unwrap()));
-        }
-
-        result
-    }
-
-    fn run_test(filename: String) -> (Result<(), ()>, MockIO) {
-        let mut io = MockIO::new();
-
-        let result = run_file_with_io(filename, &mut io);
-
-        (result, io)
-    }
-
-    fn test(testname: &str) {
-        let out_file = format!("test/{}.out", testname);
-        let ocha_file = format!("test/{}.ocha", testname);
-
-        let expected = read_output(out_file);
-
-        let (result, io) = run_test(ocha_file);
-
-        assert_eq!(result, Ok(()));
-
-        let MockIO { out, .. } = io;
-
-        assert_eq!(out, expected);
-    }
-
-    #[test]
-    fn test_expression() {
-        test("expression");
-    }
-
-    #[test]
-    fn test_variable() {
-        test("variable");
-    }
-
-    #[test]
-    fn test_list() {
-        test("list");
-    }
-
-    #[test]
-    fn test_condition() {
-        test("condition");
-    }
-
-    #[test]
-    fn test_loop() {
-        test("loop");
     }
 }
