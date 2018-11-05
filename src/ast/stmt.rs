@@ -15,6 +15,7 @@ pub enum StmtNode {
     FuncDecl { name: Token, args: Vec<Token>, body: Vec<Box<Stmt>> },
     If { condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>> },
     Print { exprs: Vec<Box<Expr>> },
+    Return { expr: Option<Box<Expr>> },
     Set { get_expr: Box<Expr>, expr: Box<Expr> },
     VarDecl { name: Token, expr: Box<Expr> },
     While { condition: Box<Expr>, body: Box<Stmt> },
@@ -28,6 +29,7 @@ pub trait StmtVisitor<T> {
     fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>) -> T;
     fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> T;
     fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> T;
+    fn visit_return(&mut self, expr: &Option<Box<Expr>>) -> T;
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> T;
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> T;
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> T;
@@ -46,6 +48,7 @@ impl Stmt {
             StmtNode::FuncDecl{name, args, body} => visitor.visit_funcdecl(name, args, body),
             StmtNode::If{condition, true_branch, false_branch} => visitor.visit_if(condition, true_branch, false_branch),
             StmtNode::Print{exprs} => visitor.visit_print(exprs),
+            StmtNode::Return{expr} => visitor.visit_return(expr),
             StmtNode::Set{get_expr, expr} => visitor.visit_set(get_expr, expr),
             StmtNode::VarDecl{name, expr} => visitor.visit_vardecl(name, expr),
             StmtNode::While{condition, body} => visitor.visit_while(condition, body),

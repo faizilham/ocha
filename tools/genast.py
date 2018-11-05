@@ -27,6 +27,7 @@ AST = {
             "FuncDecl   -> name: Token, args: Vec<Token>, body: Vec<Box<Stmt>>",
             "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>",
+            "Return     -> expr: Option<Box<Expr>>",
             "Set        -> get_expr: Box<Expr>, expr: Box<Expr>",
             "VarDecl    -> name: Token, expr: Box<Expr>",
             "While      -> condition: Box<Expr>, body: Box<Stmt>",

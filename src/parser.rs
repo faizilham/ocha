@@ -141,6 +141,8 @@ fn statement(parser: &mut ParserState) -> StmtResult {
         while_statement(parser)
     } else if parser.matches(BREAK){
         break_statement(parser)
+    } else if parser.matches(RETURN){
+        return_statement(parser)
     } else {
         expr_statement(parser)
     }
@@ -170,6 +172,20 @@ fn break_statement(parser: &mut ParserState) -> StmtResult {
     parser.expect(SEMICOLON, "Expect ';' after break")?;
 
     Ok(create_stmt(line, StmtNode::Break))
+}
+
+fn return_statement(parser: &mut ParserState) -> StmtResult {
+    let line = parser.last_line;
+
+    let expr = if !parser.peek_eq(SEMICOLON) {
+        Some(expression(parser)?)
+    } else {
+        None
+    };
+
+    parser.expect(SEMICOLON, "Expect ';' after return")?;
+
+    Ok(create_stmt(line, StmtNode::Return { expr }))
 }
 
 fn expr_statement(parser: &mut ParserState) -> StmtResult {

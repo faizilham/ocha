@@ -15,9 +15,13 @@ pub enum Bytecode {
     HALT,
     NOP,
 
-    // memory and constants
-    POP,
+    // constants
     CONST(usize),
+    NIL,
+    BOOL(bool),
+
+    // memory
+    POP,
     STORE(isize),
     LOAD(isize),
 
@@ -43,6 +47,10 @@ pub enum Bytecode {
     // branches
     BR(usize),
     BRF(usize), // branch if false
+
+    // functions
+    CALL(usize),
+    RET,
 
     // to be removed
     PRINT(usize),
@@ -129,13 +137,24 @@ impl<'io> VM<'io> {
             match code {
                 HALT => break,
                 NOP => (), // do nothing
-                POP => {
-                    self.pop();
-                },
 
+                // constants
                 CONST(idx) => {
                     let value = self.get_constant(idx);
                     self.push(value);
+                },
+
+                NIL => {
+                    self.push(Value::Nil);
+                },
+
+                BOOL(val) => {
+                    self.push(Value::Bool(val));
+                },
+
+                // memory
+                POP => {
+                    self.pop();
                 },
 
                 STORE(offset) => {
@@ -330,6 +349,10 @@ impl<'io> VM<'io> {
                         self.ip = position;
                     }
                 }
+
+                // functions
+                CALL(_) => unimplemented!(),
+                RET => unimplemented!(),
 
                 PRINT(count) => {
                     let start = self.stack.len() - count;
