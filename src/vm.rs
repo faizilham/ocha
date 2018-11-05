@@ -1,3 +1,5 @@
+use std::cmp::max;
+
 use exception::Exception;
 use exception::Exception::RuntimeErr;
 use heap::{Heap, Traceable, HeapPtr};
@@ -405,7 +407,7 @@ impl<'io> VM<'io> {
         self.heap.sweep();
 
         let num_objects = self.heap.size();
-        self.max_objects = std::cmp::max(num_objects * 2, INITIAL_GC_THRESHOLD);
+        self.max_objects = max(num_objects * 2, INITIAL_GC_THRESHOLD);
     }
 
     fn trace(&mut self) {
