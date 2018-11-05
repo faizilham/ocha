@@ -26,8 +26,11 @@ struct LabelData {
     placeholders: Vec<BranchPlaceholder>
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum Context {
+    MainCtx,
     WhileCtx { end_label: Label },
+    FuncCtx,
 }
 
 struct Block {
@@ -105,7 +108,7 @@ struct Builder {
     line_data: LineData,
     last_line: i32,
 
-    contexts: Vec<Context>,
+    context: Context,
     symbols: SymbolTable,
 }
 
@@ -144,6 +147,8 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
 
     let codes = enclose_and_merge(blocks);
 
+    println!("{:?}", &codes);
+
     let chunk = Chunk { codes, literals, line_data };
     Ok(chunk)
 }
@@ -152,8 +157,8 @@ type BuilderResult = Result<(), Exception>;
 
 impl Builder {
     fn new () -> Builder {
-        let blocks = vec![ Block::new_ref() ];
-        let current_subprog = blocks.get(0).unwrap().clone();
+        let current_subprog = Block::new_ref();
+        let blocks = vec![ current_subprog.clone() ];
 
         Builder {
             blocks,
@@ -161,11 +166,12 @@ impl Builder {
             literals: Vec::new(),
             line_data: LineData::new(),
             last_line: 0,
-            contexts: Vec::new(),
+            context: Context::MainCtx,
             symbols: SymbolTable::new(),
         }
     }
 
+    // visit function
     fn generate(&mut self, stmt: &Box<Stmt>) -> BuilderResult {
         self.last_line = stmt.line;
         Stmt::accept(stmt, self)
@@ -176,6 +182,15 @@ impl Builder {
         Expr::accept(expr, self)
     }
 
+    // block management
+    fn create_block(&mut self) -> BlockRef {
+        let block = Block::new_ref();
+        self.blocks.push(block.clone());
+
+        block
+    }
+
+    // code emitter functions
     fn next_pos(&self) -> usize {
         self.current_subprog.borrow().next_pos()
     }
@@ -187,6 +202,7 @@ impl Builder {
         index
     }
 
+    // label functions
     fn create_label(&mut self) -> Label {
         self.current_subprog.borrow_mut().create_label()
     }
@@ -198,10 +214,6 @@ impl Builder {
 
     fn set_label_position(&mut self, label: Label, position: usize) {
         self.current_subprog.borrow_mut().set_label_position(label, position);
-    }
-
-    fn get_context(&self) -> Option<&Context> {
-        self.contexts.get(self.contexts.len() - 1)
     }
 }
 
@@ -226,7 +238,7 @@ impl StmtVisitor<BuilderResult> for Builder {
         let line = self.last_line;
         let label : Label;
 
-        if let Some(Context::WhileCtx { end_label }) = self.get_context() {
+        if let Context::WhileCtx { end_label } = &self.context {
             // branch to end of loop
             label = *end_label;
         } else {
@@ -246,9 +258,25 @@ impl StmtVisitor<BuilderResult> for Builder {
     }
 
     fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>) -> BuilderResult {
-        let current = self.current_subprog.clone();
+        let subprog = self.current_subprog.clone();
+        let ctx = self.context;
 
-        unimplemented!();
+        // start function block & context
+        self.current_subprog = self.create_block();
+        self.context = Context::FuncCtx;
+
+        for stmt in body {
+            self.generate(stmt)?;
+        }
+
+        // end function block & context
+        self.current_subprog = subprog;
+        self.context = ctx;
+
+        // TODO: add function to symbol table
+
+
+        Ok(())
     }
 
     fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> BuilderResult {
@@ -330,12 +358,15 @@ impl StmtVisitor<BuilderResult> for Builder {
         // brf to loop end
         self.branch_placeholder(line, BranchType::BRF, while_end);
 
-        // generate body
-        self.contexts.push(Context::WhileCtx { end_label: while_end });
+        // start context
+        let ctx = self.context;
+        self.context = Context::WhileCtx { end_label: while_end };
 
+        // generate body
         self.generate(body)?;
 
-        self.contexts.pop();
+        // end context
+        self.context = ctx;
 
         self.emit(line, Bytecode::BR(while_start_pos)); // br to top
 
