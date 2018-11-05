@@ -30,21 +30,21 @@ enum Context {
     WhileCtx { end_label: Label },
 }
 
-struct SubProg {
+struct Block {
     codes: Vec<Bytecode>,
     labels: Vec<LabelData>,
     next_label: Label,
 }
 
-type SubProgRef = Rc<RefCell<SubProg>>;
+type BlockRef = Rc<RefCell<Block>>;
 
-impl SubProg {
-    pub fn new_ref() -> SubProgRef {
-        Rc::new(RefCell::new(SubProg::new()))
+impl Block {
+    pub fn new_ref() -> BlockRef {
+        Rc::new(RefCell::new(Block::new()))
     }
 
-    pub fn new() -> SubProg {
-        SubProg { codes: Vec::new(), labels: Vec::new(), next_label: 0 }
+    pub fn new() -> Block {
+        Block { codes: Vec::new(), labels: Vec::new(), next_label: 0 }
     }
 
     pub fn next_pos(&self) -> usize {
@@ -97,47 +97,9 @@ impl SubProg {
     }
 }
 
-struct Blocks {
-    subprograms: Vec<SubProgRef>
-}
-
-impl Blocks {
-    pub fn new () -> Blocks {
-        Blocks{
-            subprograms: vec![ SubProg::new_ref() ]
-        }
-    }
-
-    fn enclose_and_merge(self) -> Vec<Bytecode> {
-        let Blocks { mut subprograms } = self;
-        let mut codes = Vec::new();
-
-        for rf in subprograms.drain(..) {
-            let mut sub = rf.borrow_mut();
-            sub.enclose_labels();
-
-            codes.extend(&sub.codes);
-        }
-
-        codes
-    }
-
-    pub fn main(&self) -> SubProgRef {
-        self.subprograms.get(0).unwrap().clone()
-    }
-
-    pub fn create_sub(&mut self) -> SubProgRef {
-        let last = self.subprograms.len() - 1;
-
-        self.subprograms.push(SubProg::new_ref());
-
-        self.subprograms.get(last).unwrap().clone()
-    }
-}
-
-struct Builder<'a> {
-    blocks: &'a mut Blocks,
-    current_subprog: SubProgRef,
+struct Builder {
+    blocks: Vec<BlockRef>,
+    current_subprog: BlockRef,
     literals: Vec<Literal>,
 
     line_data: LineData,
@@ -147,31 +109,40 @@ struct Builder<'a> {
     symbols: SymbolTable,
 }
 
+fn enclose_and_merge(mut blocks : Vec<BlockRef>) -> Vec<Bytecode> {
+    let mut codes = Vec::new();
+
+    for rf in blocks.drain(..) {
+        let mut sub = rf.borrow_mut();
+        sub.enclose_labels();
+
+        codes.extend(&sub.codes);
+    }
+
+    codes
+}
+
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
-    let mut blocks = Blocks::new();
+    let mut builder = Builder::new();
 
-    let Builder{literals, line_data, ..} = {
-        let mut builder = Builder::new(&mut blocks);
+    let mut errors = Vec::new();
 
-        let mut errors = Vec::new();
-
-        for statement in statements {
-            if let Err(e) = builder.generate(&statement) {
-                errors.push(e);
-            }
+    for statement in statements {
+        if let Err(e) = builder.generate(&statement) {
+            errors.push(e);
         }
+    }
 
-        if errors.len() > 0 {
-            return Err(errors);
-        }
+    if errors.len() > 0 {
+        return Err(errors);
+    }
 
-        let line = builder.last_line;
-        builder.emit(line, Bytecode::HALT);
+    let line = builder.last_line;
+    builder.emit(line, Bytecode::HALT);
 
-        builder
-    };
+    let Builder{blocks, literals, line_data, ..} = builder;
 
-    let codes = blocks.enclose_and_merge();
+    let codes = enclose_and_merge(blocks);
 
     let chunk = Chunk { codes, literals, line_data };
     Ok(chunk)
@@ -179,13 +150,13 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
 
 type BuilderResult = Result<(), Exception>;
 
-
-impl<'a> Builder<'a> {
-    fn new (blocks: &mut Blocks) -> Builder {
-        let current_subprog = blocks.main();
+impl Builder {
+    fn new () -> Builder {
+        let blocks = vec![ Block::new_ref() ];
+        let current_subprog = blocks.get(0).unwrap().clone();
 
         Builder {
-            blocks: blocks,
+            blocks,
             current_subprog,
             literals: Vec::new(),
             line_data: LineData::new(),
@@ -234,7 +205,7 @@ impl<'a> Builder<'a> {
     }
 }
 
-impl<'a> StmtVisitor<BuilderResult> for Builder<'a> {
+impl StmtVisitor<BuilderResult> for Builder {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> BuilderResult {
         let offset = self.symbols.get(name)?;
         self.generate_expr(expr)?;
@@ -376,7 +347,7 @@ impl<'a> StmtVisitor<BuilderResult> for Builder<'a> {
 
 }
 
-impl<'a> ExprVisitor<BuilderResult> for Builder<'a> {
+impl ExprVisitor<BuilderResult> for Builder {
     fn visit_binary(&mut self, left: &Box<Expr>, operator: &Token, right: &Box<Expr>) -> BuilderResult {
         let line = self.last_line;
 
