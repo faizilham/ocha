@@ -1,0 +1,31 @@
+fn hello() {
+    print("hello");
+}
+
+fn world() {
+    print("world");
+}
+
+fn call_hello_world(is_hello) {
+    if (is_hello) {
+        hello();
+    } else {
+        world();
+    }
+
+    print("called");
+}
+
+
+call_hello_world(true);             // hello \n called
+call_hello_world(false);            // world \n called
+
+fn factorial(n) {
+    if (n < 2) {
+        return 1;
+    } else {
+        return factorial(n - 1) * n;
+    }
+}
+
+print(-factorial(5));               // -120

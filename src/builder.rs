@@ -272,7 +272,7 @@ impl Builder {
         let mut i = 0;
 
         for symtable in self.symbol_tables.iter().rev() {
-            if let Ok(symbol) = symtable.borrow().get(name) {
+            if let Some(symbol) = symtable.borrow().get(name) {
                 if i > 0  {
                     if let SymbolType::Var(_) = symbol {
                         return Err(Exception::ParseErr(name.line,
@@ -280,7 +280,7 @@ impl Builder {
                     }
                 }
 
-                return Ok(symbol);
+                return Ok(*symbol);
             }
 
             i += 1;

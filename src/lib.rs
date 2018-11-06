@@ -104,6 +104,11 @@ mod test {
         test("loop");
     }
 
+    #[test]
+    fn test_function() {
+        test("function");
+    }
+
     // test helper funcitons
     use super::run_file_with_io;
     use std::fs::File;

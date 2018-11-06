@@ -48,12 +48,8 @@ impl SymbolTable {
         self.add(name, SymbolType::Func(func_id));
     }
 
-    pub fn get(&self, name: &Token) -> Result<SymbolType, Exception> {
-        if let Some(symbol) = self.symbols.get(&name.lexeme) {
-            Ok(*symbol)
-        } else {
-            Err(SymbolTable::declare_err(name))
-        }
+    pub fn get(&self, name: &Token) -> Option<&SymbolType> {
+        self.symbols.get(&name.lexeme)
     }
 
     pub fn declare_err(name: &Token) -> Exception {
