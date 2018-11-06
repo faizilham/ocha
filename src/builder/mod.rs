@@ -12,7 +12,7 @@ mod context;
 
 use self::block::{BranchType, Block, BlockRef, Label};
 use self::symbol_table::{SymbolType, SymbolTable, SymbolTableRef};
-use self::context::Context;
+use self::context::{Context, ContextRef};
 use self::context::ContextType::*;
 
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Module, Vec<Exception>> {
@@ -72,7 +72,7 @@ struct Builder {
 
     last_line: i32,
 
-    context: Context,
+    context: ContextRef,
     symbol_table: SymbolTableRef,
 }
 
@@ -83,7 +83,7 @@ impl Builder {
     fn new () -> Builder {
         let current_subprog = Block::new_ref();
         let blocks = vec![ current_subprog.clone() ];
-        let context = Context::new(MainCtx, -1);
+        let context = Context::new_ref(MainCtx, None);
         let functions = vec![ FunctionSignature::new(0) ]; // first function = main function
         let symbol_table = SymbolTable::new_ref(None);
 
@@ -201,7 +201,7 @@ impl StmtVisitor<StmtResult> for Builder {
 
     fn visit_break(&mut self) -> StmtResult {
         let line = self.last_line;
-        let label = self.context.while_end_label;
+        let label = self.context.borrow().while_end_label;
 
         if label < 0 {
             return error(line, "Invalid break outside of loop")
@@ -221,12 +221,14 @@ impl StmtVisitor<StmtResult> for Builder {
 
     fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>) -> StmtResult {
         let subprog = self.current_subprog.clone();
-        let ctx = self.context;
 
         // start function block & context
         let (func_block, func_id) = self.create_function_block(args.len());
         self.current_subprog = func_block;
-        self.context = Context::new(FuncCtx, -1);
+
+        let current_context = self.context.clone();
+        let new_context = Context::create_child(&self.context, FuncCtx);
+        self.context = new_context;
 
         // add function to symbol table
         self.add_func(name, func_id)?;
@@ -267,7 +269,7 @@ impl StmtVisitor<StmtResult> for Builder {
         // end function block & context
         self.symbol_table = current_symtable;
         self.current_subprog = subprog;
-        self.context = ctx;
+        self.context = current_context;
 
         Ok(false)
     }
@@ -323,7 +325,9 @@ impl StmtVisitor<StmtResult> for Builder {
     fn visit_return(&mut self, expr: &Option<Box<Expr>>) -> StmtResult {
         let line = self.last_line;
 
-        if self.context.ctx_type != FuncCtx {
+        let ctx_type = self.context.borrow().ctx_type;
+
+        if ctx_type != FuncCtx {
             return error(line, "Invalid return outside of loop");
         }
 
@@ -371,14 +375,18 @@ impl StmtVisitor<StmtResult> for Builder {
         self.branch_placeholder(line, BranchType::BRF, while_end);
 
         // save previous while label
-        let last_label = self.context.while_end_label;
-        self.context.while_end_label = while_end;
+        let last_label = {
+            let mut ctx = self.context.borrow_mut();
+            let last_label = ctx.while_end_label;
+            ctx.while_end_label = while_end;
+            last_label
+        };
 
         // generate body
         let while_returned = self.generate(body)?;
 
         // restore previous while label
-        self.context.while_end_label = last_label;
+        self.context.borrow_mut().while_end_label = last_label;
 
         self.emit(line, Bytecode::BR(while_start_pos)); // br to top
 
