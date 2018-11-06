@@ -87,5 +87,3 @@ impl SymbolTable {
         ParseErr(name.line, format!("Identifier '{}' is not declared", &name.lexeme))
     }
 }
-
-

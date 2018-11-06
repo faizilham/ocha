@@ -1,155 +1,19 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use ast::expr::{Expr, ExprNode, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
 use exception::Exception;
 use token::Token;
 use token::TokenType::*;
 use program_data::{Literal, FunctionSignature, LineData};
+use vm::{Bytecode, Module};
 
-use vm::Module;
-use vm::Bytecode;
-use symbol_table::{SymbolType, SymbolTable, SymbolTableRef};
+mod block;
+mod symbol_table;
+mod context;
 
-enum BranchType {
-    BR,
-    BRF
-}
-
-type BranchPlaceholder = (usize, BranchType); // (position, type)
-
-type Label = i32;
-
-struct LabelData {
-    position: usize,
-    placeholders: Vec<BranchPlaceholder>
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-enum ContextType {
-    MainCtx,
-    FuncCtx,
-}
-
-use self::ContextType::*;
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-struct Context {
-    ctx_type: ContextType,
-    while_end_label: Label,
-}
-
-impl Context {
-    pub fn new(ctx_type: ContextType, while_end_label: Label) -> Context {
-        Context{ ctx_type, while_end_label }
-    }
-}
-
-struct Block {
-    codes: Vec<Bytecode>,
-    labels: Vec<LabelData>,
-    next_label: Label,
-    line_data: LineData,
-}
-
-type BlockRef = Rc<RefCell<Block>>;
-
-impl Block {
-    pub fn new_ref() -> BlockRef {
-        Rc::new(RefCell::new(Block::new()))
-    }
-
-    pub fn new() -> Block {
-        Block { codes: Vec::new(), labels: Vec::new(), next_label: 0, line_data: LineData::new() }
-    }
-
-    pub fn next_pos(&self) -> usize {
-        self.codes.len()
-    }
-
-    pub fn emit(&mut self, line: i32, bytecode : Bytecode) -> usize {
-        let index = self.next_pos();
-        self.codes.push(bytecode);
-        self.line_data.add(line);
-
-        index
-    }
-
-    pub fn create_label(&mut self) -> Label {
-        let label = self.next_label;
-        self.next_label += 1;
-
-        self.labels.push( LabelData{ position: 0, placeholders: Vec::new() } );
-
-        label
-    }
-
-    pub fn branch_placeholder(&mut self, line: i32, branch_type: BranchType, label: Label) -> usize {
-        let position = self.emit(line, Bytecode::NOP);
-        let label_data = self.labels.get_mut(label as usize).expect("Label not found");
-
-        label_data.placeholders.push((position, branch_type));
-
-        position
-    }
-
-    pub fn set_label_position(&mut self, label: Label, position: usize) {
-        let label_data = self.labels.get_mut(label as usize).expect("Label not found");
-
-        label_data.position = position;
-    }
-
-    pub fn enclose_labels(&mut self, offset: usize) {
-        for LabelData { position, placeholders } in self.labels.drain(..) {
-            let absolute_position = position + offset;
-
-            for (br_pos, br_type) in placeholders {
-                let bytecode = match br_type {
-                    BranchType::BR => Bytecode::BR(absolute_position),
-                    BranchType::BRF => Bytecode::BRF(absolute_position)
-                };
-
-                let code = self.codes.get_mut(br_pos).expect("Invalid bytecode index");
-                *code = bytecode;
-            }
-        }
-    }
-}
-
-struct Builder {
-    blocks: Vec<BlockRef>,
-    current_subprog: BlockRef,
-    literals: Vec<Literal>,
-    functions: Vec<FunctionSignature>,
-
-    last_line: i32,
-
-    context: Context,
-    symbol_table: SymbolTableRef,
-}
-
-fn enclose_and_merge(mut blocks : Vec<BlockRef>, functions: &mut Vec<FunctionSignature>) -> (Vec<Bytecode>, LineData) {
-    let mut merged_codes = Vec::new();
-    let mut merged_line = LineData::new();
-    let mut i = 0;
-
-    for rf in blocks.drain(..) {
-        let mut sub = rf.borrow_mut();
-        sub.enclose_labels(merged_codes.len());
-
-        let entry_point = merged_codes.len();
-
-        let func = functions.get_mut(i).expect("Function not found while building");
-        func.entry_point = entry_point;
-
-        merged_codes.extend(&sub.codes);
-        merged_line.extend(&sub.line_data);
-        i += 1;
-    }
-
-    (merged_codes, merged_line)
-}
+use self::block::{BranchType, Block, BlockRef, Label};
+use self::symbol_table::{SymbolType, SymbolTable, SymbolTableRef};
+use self::context::Context;
+use self::context::ContextType::*;
 
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Module, Vec<Exception>> {
     let mut builder = Builder::new();
@@ -176,6 +40,40 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Module, Vec<Exception>> {
     println!("{:?}", &codes); // TODO: remove this
 
     Ok(Module { codes, literals, functions, line_data })
+}
+
+fn enclose_and_merge(mut blocks : Vec<BlockRef>, functions: &mut Vec<FunctionSignature>) -> (Vec<Bytecode>, LineData) {
+    let mut merged_codes = Vec::new();
+    let mut merged_line = LineData::new();
+    let mut i = 0;
+
+    for rf in blocks.drain(..) {
+        let mut sub = rf.borrow_mut();
+        sub.enclose_labels(merged_codes.len());
+
+        let entry_point = merged_codes.len();
+
+        let func = functions.get_mut(i).expect("Function not found while building");
+        func.entry_point = entry_point;
+
+        merged_codes.extend(&sub.codes);
+        merged_line.extend(&sub.line_data);
+        i += 1;
+    }
+
+    (merged_codes, merged_line)
+}
+
+struct Builder {
+    blocks: Vec<BlockRef>,
+    current_subprog: BlockRef,
+    literals: Vec<Literal>,
+    functions: Vec<FunctionSignature>,
+
+    last_line: i32,
+
+    context: Context,
+    symbol_table: SymbolTableRef,
 }
 
 type StmtResult = Result<bool, Exception>; // result: is statement returned
