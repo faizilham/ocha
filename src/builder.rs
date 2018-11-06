@@ -10,7 +10,7 @@ use program_data::{Literal, FunctionSignature, LineData};
 
 use vm::Module;
 use vm::Bytecode;
-use symbol_table::{SymbolType, SymbolTable};
+use symbol_table::{SymbolType, SymbolTable, SymbolTableRef};
 
 enum BranchType {
     BR,
@@ -126,7 +126,7 @@ struct Builder {
     last_line: i32,
 
     context: Context,
-    symbols: SymbolTable,
+    symbol_tables: Vec<SymbolTableRef>,
 }
 
 fn enclose_and_merge(mut blocks : Vec<BlockRef>, functions: &mut Vec<FunctionSignature>) -> (Vec<Bytecode>, LineData) {
@@ -187,6 +187,7 @@ impl Builder {
         let blocks = vec![ current_subprog.clone() ];
         let context = Context::new(MainCtx, -1);
         let functions = vec![ FunctionSignature::new(0) ]; // first function = main function
+        let symbol_tables = vec![ SymbolTable::new_ref() ];
 
         Builder {
             blocks,
@@ -195,7 +196,7 @@ impl Builder {
             functions,
             last_line: 0,
             context,
-            symbols: SymbolTable::new(),
+            symbol_tables,
         }
     }
 
@@ -244,11 +245,56 @@ impl Builder {
     fn set_label_position(&mut self, label: Label, position: usize) {
         self.current_subprog.borrow_mut().set_label_position(label, position);
     }
+
+    // symbols
+    fn symtable(&self) -> SymbolTableRef {
+        let last = self.symbol_tables.len() - 1;
+        self.symbol_tables.get(last).unwrap().clone()
+    }
+
+    fn add_var(&mut self, name: &Token) -> isize {
+        let symtable = self.symtable();
+        let result = symtable.borrow_mut().add_var(name);
+
+        result
+    }
+
+    fn add_func(&mut self, name: &Token, func_id: usize) {
+        let symtable = self.symtable();
+        let result = symtable.borrow_mut().add_func(name, func_id);
+
+        result
+    }
+
+    fn get_symbol(&self, name: &Token) -> Result<SymbolType, Exception> {
+        // TODO: handle global variable & closure
+
+        let mut i = 0;
+
+        for symtable in self.symbol_tables.iter().rev() {
+            if let Ok(symbol) = symtable.borrow().get(name) {
+                if i > 0  {
+                    if let SymbolType::Var(_) = symbol {
+                        return Err(Exception::ParseErr(name.line,
+                            String::from("Can't reference global variable")));
+                    }
+                }
+
+                return Ok(symbol);
+            }
+
+            i += 1;
+        }
+
+        Err(SymbolTable::declare_err(name))
+    }
 }
 
 impl StmtVisitor<StmtResult> for Builder {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> StmtResult {
-        if let SymbolType::Var(offset) = self.symbols.get(name)? {
+
+        // TODO: handle global variable & closure
+        if let SymbolType::Var(offset) = self.get_symbol(name)? {
             self.generate_expr(expr)?;
             self.emit(name.line, Bytecode::STORE(offset));
             return Ok(false);
@@ -299,8 +345,23 @@ impl StmtVisitor<StmtResult> for Builder {
         self.current_subprog = func_block;
         self.context = Context::new(FuncCtx, -1);
 
-        // TODO: push new symbol table and put args inside it
+        // add function to symbol table
+        self.add_func(name, func_id);
 
+        // push new symbol table and put args inside it
+        let symtable = SymbolTable::new_ref();
+        {
+            let mut rf = symtable.borrow_mut();
+            let offset_start = -(args.len() as isize + 3);
+
+            let mut i = 0;
+            for arg in args {
+                rf.add_var_offset(arg, i + offset_start);
+                i += 1;
+            }
+
+        }
+        self.symbol_tables.push(symtable);
 
 
         let mut block_returned = false;
@@ -320,11 +381,9 @@ impl StmtVisitor<StmtResult> for Builder {
         }
 
         // end function block & context
+        self.symbol_tables.pop();
         self.current_subprog = subprog;
         self.context = ctx;
-
-        // add function to symbol table
-        self.symbols.add_func(name, func_id);
 
         Ok(false)
     }
@@ -410,7 +469,7 @@ impl StmtVisitor<StmtResult> for Builder {
     }
 
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> StmtResult {
-        self.symbols.add_var(name);
+        self.add_var(name);
         self.generate_expr(expr)?;
 
         Ok(false)
@@ -582,7 +641,9 @@ impl ExprVisitor<ExprResult> for Builder {
     }
 
     fn visit_variable(&mut self, name: &Token) -> ExprResult {
-        let bytecode = match self.symbols.get(name)? {
+
+        // TODO: handle global variable & closure
+        let bytecode = match self.get_symbol(name)? {
             SymbolType::Var(offset) => Bytecode::LOAD(offset),
             SymbolType::Func(id) => Bytecode::LOAD_FUNC(id),
         };
