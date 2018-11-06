@@ -1,13 +1,12 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct LineEncoding {
-    start: usize,
-    end: usize,
+    count: usize,
     line: i32,
 }
 
 impl LineEncoding {
-    pub fn new(index: usize, line: i32) -> LineEncoding {
-        LineEncoding {start: index, end: index, line}
+    pub fn new(line: i32) -> LineEncoding {
+        LineEncoding {count: 1, line}
     }
 }
 
@@ -21,10 +20,10 @@ impl LineData {
         LineData { data }
     }
 
-    pub fn add(&mut self, index: usize, line: i32) {
+    pub fn add(&mut self, line: i32) {
         let len = self.data.len();
         if len == 0 {
-            self.data.push(LineEncoding::new(index, line));
+            self.data.push(LineEncoding::new(line));
             return;
         }
 
@@ -32,21 +31,28 @@ impl LineData {
             let last = self.data.get_mut(len - 1).unwrap();
 
             if last.line == line {
-                (*last).end = index;
+                (*last).count += 1;
                 return;
             }
         }
 
-        self.data.push(LineEncoding::new(index, line));
+        self.data.push(LineEncoding::new(line));
     }
 
     pub fn get_line(&self, index: usize) -> i32 {
+        let mut total = 0;
         for item in self.data.iter() {
-            if item.start <= index && item.end > index {
+            total += item.count;
+
+            if index < total {
                 return item.line;
             }
         }
 
         -1
+    }
+
+    pub fn extend(&mut self, other : &LineData) {
+        self.data.extend(&other.data);
     }
 }

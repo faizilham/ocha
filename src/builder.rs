@@ -50,6 +50,7 @@ struct Block {
     codes: Vec<Bytecode>,
     labels: Vec<LabelData>,
     next_label: Label,
+    line_data: LineData,
 }
 
 type BlockRef = Rc<RefCell<Block>>;
@@ -60,16 +61,17 @@ impl Block {
     }
 
     pub fn new() -> Block {
-        Block { codes: Vec::new(), labels: Vec::new(), next_label: 0 }
+        Block { codes: Vec::new(), labels: Vec::new(), next_label: 0, line_data: LineData::new() }
     }
 
     pub fn next_pos(&self) -> usize {
         self.codes.len()
     }
 
-    pub fn emit(&mut self, bytecode : Bytecode) -> usize {
+    pub fn emit(&mut self, line: i32, bytecode : Bytecode) -> usize {
         let index = self.next_pos();
         self.codes.push(bytecode);
+        self.line_data.add(line);
 
         index
     }
@@ -83,8 +85,8 @@ impl Block {
         label
     }
 
-    pub fn branch_placeholder(&mut self, branch_type: BranchType, label: Label) -> usize {
-        let position = self.emit(Bytecode::NOP);
+    pub fn branch_placeholder(&mut self, line: i32, branch_type: BranchType, label: Label) -> usize {
+        let position = self.emit(line, Bytecode::NOP);
         let label_data = self.labels.get_mut(label as usize).unwrap();
 
         label_data.placeholders.push((position, branch_type));
@@ -120,24 +122,24 @@ struct Builder {
     current_subprog: BlockRef,
     literals: Vec<Literal>,
 
-    line_data: LineData,
     last_line: i32,
 
     context: Context,
     symbols: SymbolTable,
 }
 
-fn enclose_and_merge(mut blocks : Vec<BlockRef>) -> Vec<Bytecode> {
-    let mut codes = Vec::new();
+fn enclose_and_merge(mut blocks : Vec<BlockRef>) -> (Vec<Bytecode>, LineData) {
+    let mut merged_codes = Vec::new();
+    let mut merged_line = LineData::new();
 
     for rf in blocks.drain(..) {
         let mut sub = rf.borrow_mut();
-        sub.enclose_labels(codes.len());
-
-        codes.extend(&sub.codes);
+        sub.enclose_labels(merged_codes.len());
+        merged_codes.extend(&sub.codes);
+        merged_line.extend(&sub.line_data);
     }
 
-    codes
+    (merged_codes, merged_line)
 }
 
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
@@ -158,9 +160,9 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
     let line = builder.last_line;
     builder.emit(line, Bytecode::HALT);
 
-    let Builder{blocks, literals, line_data, ..} = builder;
+    let Builder{blocks, literals, ..} = builder;
 
-    let codes = enclose_and_merge(blocks);
+    let (codes, line_data) = enclose_and_merge(blocks);
 
     println!("{:?}", &codes); // TODO: remove this
 
@@ -181,7 +183,6 @@ impl Builder {
             blocks,
             current_subprog,
             literals: Vec::new(),
-            line_data: LineData::new(),
             last_line: 0,
             context,
             symbols: SymbolTable::new(),
@@ -213,8 +214,7 @@ impl Builder {
     }
 
     fn emit(&mut self, line: i32, bytecode : Bytecode) -> usize {
-        let index = self.current_subprog.borrow_mut().emit(bytecode);
-        self.line_data.add(index, line);
+        let index = self.current_subprog.borrow_mut().emit(line, bytecode);
 
         index
     }
@@ -225,8 +225,7 @@ impl Builder {
     }
 
     fn branch_placeholder(&mut self, line: i32, branch_type: BranchType, label: Label) {
-        let index = self.current_subprog.borrow_mut().branch_placeholder(branch_type, label);
-        self.line_data.add(index, line);
+        let index = self.current_subprog.borrow_mut().branch_placeholder(line, branch_type, label);
     }
 
     fn set_label_position(&mut self, label: Label, position: usize) {
