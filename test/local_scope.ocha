@@ -1,0 +1,19 @@
+let a = "out";
+let b = "b_out";
+
+print(a);                       // out
+
+if (true) {
+    let a = "inner";
+
+    print(a, b);                // inner b_out
+
+    let b = "b_in";
+
+    if (true) {
+        let a = "inner2";
+        print(a, b);            // inner2 b_in
+    }
+}
+
+print(a);                       // out

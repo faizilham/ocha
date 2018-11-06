@@ -126,7 +126,7 @@ struct Builder {
     last_line: i32,
 
     context: Context,
-    symbol_tables: Vec<SymbolTableRef>,
+    symbol_table: SymbolTableRef,
 }
 
 fn enclose_and_merge(mut blocks : Vec<BlockRef>, functions: &mut Vec<FunctionSignature>) -> (Vec<Bytecode>, LineData) {
@@ -187,7 +187,7 @@ impl Builder {
         let blocks = vec![ current_subprog.clone() ];
         let context = Context::new(MainCtx, -1);
         let functions = vec![ FunctionSignature::new(0) ]; // first function = main function
-        let symbol_tables = vec![ SymbolTable::new_ref() ];
+        let symbol_table = SymbolTable::new_ref(None);
 
         Builder {
             blocks,
@@ -196,7 +196,7 @@ impl Builder {
             functions,
             last_line: 0,
             context,
-            symbol_tables,
+            symbol_table,
         }
     }
 
@@ -247,43 +247,22 @@ impl Builder {
     }
 
     // symbols
-    fn symtable(&self) -> SymbolTableRef {
-        let last = self.symbol_tables.len() - 1;
-        self.symbol_tables.get(last).unwrap().clone()
+    fn add_var(&mut self, name: &Token) -> Result<isize, Exception> {
+        let mut symtable = self.symbol_table.borrow_mut();
+        symtable.add_var(name)
     }
 
-    fn add_var(&mut self, name: &Token) -> isize {
-        let symtable = self.symtable();
-        let result = symtable.borrow_mut().add_var(name);
-
-        result
-    }
-
-    fn add_func(&mut self, name: &Token, func_id: usize) {
-        let symtable = self.symtable();
-        let result = symtable.borrow_mut().add_func(name, func_id);
-
-        result
+    fn add_func(&mut self, name: &Token, func_id: usize) -> Result<(), Exception> {
+        let mut symtable = self.symbol_table.borrow_mut();
+        symtable.add_func(name, func_id)
     }
 
     fn get_symbol(&self, name: &Token) -> Result<SymbolType, Exception> {
         // TODO: handle global variable & closure
+        let symtable = self.symbol_table.borrow();
 
-        let mut i = 0;
-
-        for symtable in self.symbol_tables.iter().rev() {
-            if let Some(symbol) = symtable.borrow().get(name) {
-                if i > 0  {
-                    if let SymbolType::Var(_) = symbol {
-                        return Err(Exception::ParseErr(name.line,
-                            String::from("Can't reference global variable")));
-                    }
-                }
-
-                return Ok(*symbol);
-            }
-
-            i += 1;
+        if let Some(symbol) = symtable.get(name) {
+            return Ok(symbol);
         }
 
         Err(SymbolTable::declare_err(name))
@@ -304,6 +283,10 @@ impl StmtVisitor<StmtResult> for Builder {
     }
 
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> StmtResult {
+        let current_symtable = self.symbol_table.clone();
+        let symtable = SymbolTable::create_child(&self.symbol_table);
+        self.symbol_table = symtable;
+
         let mut block_returned = false;
         for statement in body {
             block_returned = self.generate(statement)?;
@@ -312,6 +295,8 @@ impl StmtVisitor<StmtResult> for Builder {
                 break; // do not generate unreachable codes
             }
         }
+
+        self.symbol_table = current_symtable;
 
         Ok(block_returned)
     }
@@ -346,23 +331,23 @@ impl StmtVisitor<StmtResult> for Builder {
         self.context = Context::new(FuncCtx, -1);
 
         // add function to symbol table
-        self.add_func(name, func_id);
+        self.add_func(name, func_id)?;
 
         // push new symbol table and put args inside it
-        let symtable = SymbolTable::new_ref();
+        let current_symtable = self.symbol_table.clone();
+        let symtable = SymbolTable::create_child(&self.symbol_table);
         {
             let mut rf = symtable.borrow_mut();
             let offset_start = -(args.len() as isize + 3);
 
             let mut i = 0;
             for arg in args {
-                rf.add_var_offset(arg, i + offset_start);
+                rf.add_var_offset(arg, i + offset_start)?;
                 i += 1;
             }
 
         }
-        self.symbol_tables.push(symtable);
-
+        self.symbol_table = symtable;
 
         let mut block_returned = false;
 
@@ -380,8 +365,9 @@ impl StmtVisitor<StmtResult> for Builder {
             self.emit(line, Bytecode::RET);
         }
 
+        // TODO: handle restore on exception
         // end function block & context
-        self.symbol_tables.pop();
+        self.symbol_table = current_symtable;
         self.current_subprog = subprog;
         self.context = ctx;
 
@@ -469,7 +455,7 @@ impl StmtVisitor<StmtResult> for Builder {
     }
 
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> StmtResult {
-        self.add_var(name);
+        self.add_var(name)?;
         self.generate_expr(expr)?;
 
         Ok(false)
