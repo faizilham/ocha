@@ -166,13 +166,14 @@ impl<'io> VM<'io> {
                     let value = self.pop();
                     let pos = (self.fp as isize) + offset;
 
-                    let var = self.stack.get_mut(pos as usize).unwrap();
+                    let var = self.stack.get_mut(pos as usize).expect("Invalid stack access");
                     *var = value;
                 },
 
                 LOAD(offset) => {
                     let pos = (self.fp as isize) + offset;
-                    let value = self.stack.get(pos as usize).unwrap().clone();
+                    let value = self.stack.get(pos as usize)
+                        .expect("Invalid stack access").clone();
                     self.stack.push(value);
                 },
 
@@ -357,7 +358,7 @@ impl<'io> VM<'io> {
 
                 // functions
                 LOAD_FUNC(id) => {
-                    let signature = *self.functions.get(id).unwrap();
+                    let signature = *self.functions.get(id).expect("Unknown function loaded");
                     self.push(Func(OchaFunc::new(signature)));
                 },
 

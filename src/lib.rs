@@ -110,7 +110,7 @@ mod test {
     use std::io::{BufRead, BufReader};
 
     fn read_output(filename: String) -> Vec<String> {
-        let file = File::open(filename).unwrap();
+        let file = File::open(filename).expect("Output test file not found");
 
         let mut result = Vec::new();
 

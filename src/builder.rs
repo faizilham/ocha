@@ -87,7 +87,7 @@ impl Block {
 
     pub fn branch_placeholder(&mut self, line: i32, branch_type: BranchType, label: Label) -> usize {
         let position = self.emit(line, Bytecode::NOP);
-        let label_data = self.labels.get_mut(label as usize).unwrap();
+        let label_data = self.labels.get_mut(label as usize).expect("Label not found");
 
         label_data.placeholders.push((position, branch_type));
 
@@ -95,7 +95,7 @@ impl Block {
     }
 
     pub fn set_label_position(&mut self, label: Label, position: usize) {
-        let label_data = self.labels.get_mut(label as usize).unwrap();
+        let label_data = self.labels.get_mut(label as usize).expect("Label not found");
 
         label_data.position = position;
     }
@@ -110,7 +110,7 @@ impl Block {
                     BranchType::BRF => Bytecode::BRF(absolute_position)
                 };
 
-                let code = self.codes.get_mut(br_pos).unwrap();
+                let code = self.codes.get_mut(br_pos).expect("Invalid bytecode index");
                 *code = bytecode;
             }
         }
@@ -140,7 +140,7 @@ fn enclose_and_merge(mut blocks : Vec<BlockRef>, functions: &mut Vec<FunctionSig
 
         let entry_point = merged_codes.len();
 
-        let func = functions.get_mut(i).unwrap();
+        let func = functions.get_mut(i).expect("Function not found while building");
         func.entry_point = entry_point;
 
         merged_codes.extend(&sub.codes);
