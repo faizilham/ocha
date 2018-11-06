@@ -5,9 +5,9 @@ use exception::Exception::RuntimeErr;
 use heap::{Heap, Traceable, HeapPtr};
 use io::OchaIO;
 
-use program_data::{Literal, LineData};
+use program_data::{Literal, FunctionSignature, LineData};
 
-use value::{Value, OchaStr, VecList};
+use value::{Value, OchaStr, VecList, OchaFunc};
 use value::get_traceable;
 
 #[allow(non_camel_case_types)]
@@ -50,6 +50,7 @@ pub enum Bytecode {
     BRF(usize), // branch if false
 
     // functions
+    LOAD_FUNC(usize),
     CALL(usize),
     RET,
 
@@ -63,11 +64,13 @@ use self::Value::*;
 pub struct Module {
     pub codes: Vec<Bytecode>,
     pub literals: Vec<Literal>,
+    pub functions: Vec<FunctionSignature>,
     pub line_data: LineData,
 }
 
 pub struct VM<'io> {
     codes: Vec<Bytecode>,
+    functions: Vec<FunctionSignature>,
     constants: Vec<Value>,
     stack: Vec<Value>,
     heap: Heap,
@@ -83,7 +86,7 @@ const INITIAL_GC_THRESHOLD : usize = 50;
 
 impl<'io> VM<'io> {
     pub fn new (module: Module, io: &'io mut OchaIO) -> VM {
-        let Module { codes, mut literals, line_data } = module;
+        let Module { codes, mut literals, line_data, functions } = module;
 
         let stack = Vec::with_capacity(256);
         let heap = Heap::new();
@@ -91,6 +94,7 @@ impl<'io> VM<'io> {
 
         let mut vm = VM {
             codes,
+            functions,
             constants,
             stack,
             heap,
@@ -352,6 +356,11 @@ impl<'io> VM<'io> {
                 }
 
                 // functions
+                LOAD_FUNC(id) => {
+                    let signature = *self.functions.get(id).unwrap();
+                    self.push(Value::Func(OchaFunc::new(signature)));
+                },
+
                 CALL(_) => unimplemented!(),
                 RET => unimplemented!(),
 

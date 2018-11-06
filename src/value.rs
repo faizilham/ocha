@@ -2,6 +2,8 @@ use std::rc::Rc;
 use std::cell::Cell;
 use std::cell::RefCell;
 
+use program_data::FunctionSignature;
+
 use super::heap::HeapPtr;
 use super::heap::Traceable;
 
@@ -14,6 +16,8 @@ pub enum Value {
     Int(i64),
     Float(f64),
     Bool(bool),
+
+    Func(OchaFunc), // TODO: move to heap objects
 
     // heap objects
     Str(HeapPtr<OchaStr>),
@@ -69,7 +73,8 @@ impl Value {
             Float(f) => format!("{}", f),
             Bool(b) => String::from( if *b {"true"} else {"false"} ),
             Str(s) => s.get_ref().to_string(),
-            List(_) => String::from("[list]")
+            List(_) => String::from("[list]"),
+            Func(f) => format!("Func({})", f.signature.num_args),
         }
     }
 }
@@ -102,6 +107,7 @@ impl Clone for Value {
             &Bool(b) => Bool(b),
             Str(r) => Str(r.clone()),
             List(r) => List(r.clone()),
+            Func(f) => Func(f.clone()),
             Nil => Nil
         }
     }
@@ -211,3 +217,38 @@ impl Traceable for VecList {
         self.traced.get()
     }
 }
+
+/*** OchaFunc Declaration ***/
+#[derive(Debug, Clone)]
+pub struct OchaFunc {
+    signature: FunctionSignature,
+    // TODO: implement Traceable
+    // traced: Cell<bool>,
+
+    // TODO: Pointer to closure memory here
+}
+
+impl OchaFunc {
+    pub fn new(signature: FunctionSignature) -> OchaFunc {
+        OchaFunc { signature }
+    }
+}
+
+// impl Traceable for OchaFunc {
+//     fn trace(&self) {
+//         if self.is_traced() {
+//             return;
+//         }
+
+//         self.traced.set(true);
+//         // TODO: trace closure
+//     }
+
+//     fn reset_trace(&self) {
+//         self.traced.set(false);
+//     }
+
+//     fn is_traced(&self) -> bool {
+//         self.traced.get()
+//     }
+// }

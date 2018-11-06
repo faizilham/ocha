@@ -8,6 +8,18 @@ pub enum Literal {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct FunctionSignature {
+    pub entry_point: usize,
+    pub num_args: usize
+}
+
+impl FunctionSignature {
+    pub fn new(num_args: usize) -> FunctionSignature {
+        FunctionSignature { entry_point: 0, num_args }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 struct LineEncoding {
     count: usize,
     line: i32,

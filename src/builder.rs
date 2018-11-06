@@ -6,11 +6,11 @@ use ast::stmt::{Stmt, StmtVisitor};
 use exception::Exception;
 use token::Token;
 use token::TokenType::*;
-use program_data::{Literal, LineData};
+use program_data::{Literal, FunctionSignature, LineData};
 
 use vm::Module;
 use vm::Bytecode;
-use symbol_table::SymbolTable;
+use symbol_table::{SymbolType, SymbolTable};
 
 enum BranchType {
     BR,
@@ -121,6 +121,7 @@ struct Builder {
     blocks: Vec<BlockRef>,
     current_subprog: BlockRef,
     literals: Vec<Literal>,
+    functions: Vec<FunctionSignature>,
 
     last_line: i32,
 
@@ -160,13 +161,13 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Module, Vec<Exception>> {
     let line = builder.last_line;
     builder.emit(line, Bytecode::HALT);
 
-    let Builder{blocks, literals, ..} = builder;
+    let Builder{blocks, literals, functions, ..} = builder;
 
     let (codes, line_data) = enclose_and_merge(blocks);
 
     println!("{:?}", &codes); // TODO: remove this
 
-    Ok(Module { codes, literals, line_data })
+    Ok(Module { codes, literals, functions, line_data })
 }
 
 type StmtResult = Result<bool, Exception>; // result: is statement returned
@@ -177,11 +178,13 @@ impl Builder {
         let current_subprog = Block::new_ref();
         let blocks = vec![ current_subprog.clone() ];
         let context = Context::new(MainCtx, -1);
+        let functions = vec![ FunctionSignature::new(0) ]; // first function = main function
 
         Builder {
             blocks,
             current_subprog,
             literals: Vec::new(),
+            functions,
             last_line: 0,
             context,
             symbols: SymbolTable::new(),
@@ -200,11 +203,14 @@ impl Builder {
     }
 
     // block management
-    fn create_block(&mut self) -> BlockRef {
+    fn create_function_block(&mut self, num_args: usize) -> (BlockRef, usize) {
         let block = Block::new_ref();
         self.blocks.push(block.clone());
 
-        block
+        let func_id = self.functions.len();
+        self.functions.push(FunctionSignature::new(num_args));
+
+        (block, func_id)
     }
 
     // code emitter functions
@@ -234,12 +240,13 @@ impl Builder {
 
 impl StmtVisitor<StmtResult> for Builder {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> StmtResult {
-        let offset = self.symbols.get(name)?;
-        self.generate_expr(expr)?;
+        if let SymbolType::Var(offset) = self.symbols.get(name)? {
+            self.generate_expr(expr)?;
+            self.emit(name.line, Bytecode::STORE(offset));
+            return Ok(false);
+        }
 
-        self.emit(name.line, Bytecode::STORE(offset));
-
-        Ok(false)
+        error(name.line, "Can't assign value to function")
     }
 
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> StmtResult {
@@ -280,8 +287,13 @@ impl StmtVisitor<StmtResult> for Builder {
         let ctx = self.context;
 
         // start function block & context
-        self.current_subprog = self.create_block();
+        let (func_block, func_id) = self.create_function_block(args.len());
+        self.current_subprog = func_block;
         self.context = Context::new(FuncCtx, -1);
+
+        // TODO: push new symbol table and put args inside it
+
+
 
         let mut block_returned = false;
 
@@ -303,7 +315,8 @@ impl StmtVisitor<StmtResult> for Builder {
         self.current_subprog = subprog;
         self.context = ctx;
 
-        // TODO: add function to symbol table
+        // add function to symbol table
+        self.symbols.add_func(name, func_id);
 
         Ok(false)
     }
@@ -389,7 +402,7 @@ impl StmtVisitor<StmtResult> for Builder {
     }
 
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> StmtResult {
-        self.symbols.add_local(name);
+        self.symbols.add_var(name);
         self.generate_expr(expr)?;
 
         Ok(false)
@@ -452,7 +465,17 @@ impl ExprVisitor<ExprResult> for Builder {
     }
 
     fn visit_funccall(&mut self, callee: &Box<Expr>, args: &Vec<Box<Expr>>) -> ExprResult {
-        unimplemented!();
+        let line = self.last_line;
+
+        for arg in args {
+            self.generate_expr(arg)?;
+        }
+
+        self.generate_expr(callee)?;
+
+        self.emit(line, Bytecode::CALL(args.len()));
+
+        Ok(())
     }
 
     fn visit_get(&mut self, callee: &Box<Expr>, _: &Token, member: &Box<Expr>) -> ExprResult {
@@ -551,9 +574,12 @@ impl ExprVisitor<ExprResult> for Builder {
     }
 
     fn visit_variable(&mut self, name: &Token) -> ExprResult {
-        let offset = self.symbols.get(name)?;
+        let bytecode = match self.symbols.get(name)? {
+            SymbolType::Var(offset) => Bytecode::LOAD(offset),
+            SymbolType::Func(id) => Bytecode::LOAD_FUNC(id),
+        };
 
-        self.emit(name.line, Bytecode::LOAD(offset));
+        self.emit(name.line, bytecode);
 
         Ok(())
     }
