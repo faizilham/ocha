@@ -7,7 +7,7 @@ use exception::Exception;
 use token::Token;
 use token::TokenType::*;
 use token::Literal;
-use vm::Chunk;
+use vm::Module;
 use vm::Bytecode;
 use line_data::LineData;
 use symbol_table::SymbolTable;
@@ -142,7 +142,7 @@ fn enclose_and_merge(mut blocks : Vec<BlockRef>) -> (Vec<Bytecode>, LineData) {
     (merged_codes, merged_line)
 }
 
-pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
+pub fn build(statements: Vec<Box<Stmt>>) -> Result<Module, Vec<Exception>> {
     let mut builder = Builder::new();
 
     let mut errors = Vec::new();
@@ -166,8 +166,7 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Chunk, Vec<Exception>> {
 
     println!("{:?}", &codes); // TODO: remove this
 
-    let chunk = Chunk { codes, literals, line_data };
-    Ok(chunk)
+    Ok(Module { codes, literals, line_data })
 }
 
 type StmtResult = Result<bool, Exception>; // result: is statement returned

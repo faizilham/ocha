@@ -15,7 +15,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 use exception::Exception;
-use vm::{VM, Chunk};
+use vm::{VM, Module};
 use io::{OchaIO, OchaStdIO};
 
 pub fn run_file(filename : String) -> Result<(), ()> {
@@ -26,9 +26,9 @@ pub fn run_file(filename : String) -> Result<(), ()> {
 
 fn run_file_with_io(filename : String, io: &mut OchaIO) -> Result<(), ()> {
     let source = read_file_with_io(&filename, io)?;
-    let chunk = parse_and_build(source).map_err(|e| report_exceptions(io, e))?;
+    let module = parse_and_build(source).map_err(|e| report_exceptions(io, e))?;
 
-    execute(chunk, io).map_err(|e| report_exception(io, e))
+    execute(module, io).map_err(|e| report_exception(io, e))
 }
 
 fn read_file_with_io (filename : &str, io: &mut OchaIO) -> Result<String, ()> {
@@ -48,15 +48,15 @@ fn read_file_with_io (filename : &str, io: &mut OchaIO) -> Result<String, ()> {
     Err(())
 }
 
-fn parse_and_build(source : String) -> Result<Chunk, Vec<Exception>> {
+fn parse_and_build(source : String) -> Result<Module, Vec<Exception>> {
     let tokens = lexer::scan(source)?;
     let statements = parser::parse(tokens)?;
 
     builder::build(statements)
 }
 
-fn execute(chunk: Chunk, io: &mut OchaIO) -> Result<(), Exception> {
-    let mut vm = VM::new(chunk, io);
+fn execute(module: Module, io: &mut OchaIO) -> Result<(), Exception> {
+    let mut vm = VM::new(module, io);
     vm.run()
 }
 

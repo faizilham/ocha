@@ -59,7 +59,7 @@ pub enum Bytecode {
 use self::Bytecode::*;
 use self::Value::*;
 
-pub struct Chunk {
+pub struct Module {
     pub codes: Vec<Bytecode>,
     pub literals: Vec<Literal>,
     pub line_data: LineData,
@@ -81,8 +81,8 @@ pub struct VM<'io> {
 const INITIAL_GC_THRESHOLD : usize = 50;
 
 impl<'io> VM<'io> {
-    pub fn new (chunk: Chunk, io: &'io mut OchaIO) -> VM {
-        let Chunk { codes, mut literals, line_data } = chunk;
+    pub fn new (module: Module, io: &'io mut OchaIO) -> VM {
+        let Module { codes, mut literals, line_data } = module;
 
         let stack = Vec::with_capacity(256);
         let heap = Heap::new();
