@@ -221,7 +221,7 @@ impl Traceable for VecList {
 /*** OchaFunc Declaration ***/
 #[derive(Debug, Clone)]
 pub struct OchaFunc {
-    signature: FunctionSignature,
+    pub signature: FunctionSignature,
     // TODO: implement Traceable
     // traced: Cell<bool>,
 

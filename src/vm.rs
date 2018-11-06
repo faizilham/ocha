@@ -75,7 +75,7 @@ pub struct VM<'io> {
     stack: Vec<Value>,
     heap: Heap,
     ip: usize,
-    fp: isize,
+    fp: usize,
     line_data: LineData,
     max_objects: usize,
 
@@ -164,14 +164,14 @@ impl<'io> VM<'io> {
 
                 STORE(offset) => {
                     let value = self.pop();
-                    let pos = self.fp + offset;
+                    let pos = (self.fp as isize) + offset;
 
                     let var = self.stack.get_mut(pos as usize).unwrap();
                     *var = value;
                 },
 
                 LOAD(offset) => {
-                    let pos = self.fp + offset;
+                    let pos = (self.fp as isize) + offset;
                     let value = self.stack.get(pos as usize).unwrap().clone();
                     self.stack.push(value);
                 },
@@ -358,11 +358,51 @@ impl<'io> VM<'io> {
                 // functions
                 LOAD_FUNC(id) => {
                     let signature = *self.functions.get(id).unwrap();
-                    self.push(Value::Func(OchaFunc::new(signature)));
+                    self.push(Func(OchaFunc::new(signature)));
                 },
 
-                CALL(_) => unimplemented!(),
-                RET => unimplemented!(),
+                CALL(num_args) => {
+                    // check function value
+                    let entry_point = if let Func(func) = self.peek(0) {
+                        if func.signature.num_args != num_args {
+                            return Err("Wrong number of arguments in function call");
+                        }
+
+                        func.signature.entry_point
+                    } else {
+                        return Err("Invalid type for call operator")
+                    };
+
+                    let ip = self.ip as i64;
+                    let fp = self.fp as i64;
+
+                    self.push_int(ip);
+                    self.push_int(fp);
+
+                    self.fp = self.stack.len();
+                    self.ip = entry_point;
+                },
+
+                RET => {
+                    let ret_val = self.pop();
+
+                    self.stack.truncate(self.fp);
+                    let fp = self.pop_int() as usize;
+                    let ip = self.pop_int() as usize;
+
+                    let num_args = if let Func(func) = self.pop() {
+                        func.signature.num_args
+                    } else {
+                        unreachable!();
+                    };
+
+                    let len = self.stack.len();
+                    self.stack.truncate(len - num_args);
+
+                    self.push(ret_val);
+                    self.fp = fp;
+                    self.ip = ip;
+                }
 
                 PRINT(count) => {
                     let start = self.stack.len() - count;
@@ -391,6 +431,18 @@ impl<'io> VM<'io> {
         } else {
             panic!("Stack underflow");
         }
+    }
+
+    fn push_int(&mut self, i: i64) {
+        self.push(Int(i));
+    }
+
+    fn pop_int(&mut self) -> i64 {
+        if let Int(i) = self.pop() {
+            return i;
+        }
+
+        panic!("Invalid int value");
     }
 
     fn peek(&mut self, offset: usize) -> &mut Value {

@@ -129,15 +129,23 @@ struct Builder {
     symbols: SymbolTable,
 }
 
-fn enclose_and_merge(mut blocks : Vec<BlockRef>) -> (Vec<Bytecode>, LineData) {
+fn enclose_and_merge(mut blocks : Vec<BlockRef>, functions: &mut Vec<FunctionSignature>) -> (Vec<Bytecode>, LineData) {
     let mut merged_codes = Vec::new();
     let mut merged_line = LineData::new();
+    let mut i = 0;
 
     for rf in blocks.drain(..) {
         let mut sub = rf.borrow_mut();
         sub.enclose_labels(merged_codes.len());
+
+        let entry_point = merged_codes.len();
+
+        let func = functions.get_mut(i).unwrap();
+        func.entry_point = entry_point;
+
         merged_codes.extend(&sub.codes);
         merged_line.extend(&sub.line_data);
+        i += 1;
     }
 
     (merged_codes, merged_line)
@@ -161,9 +169,9 @@ pub fn build(statements: Vec<Box<Stmt>>) -> Result<Module, Vec<Exception>> {
     let line = builder.last_line;
     builder.emit(line, Bytecode::HALT);
 
-    let Builder{blocks, literals, functions, ..} = builder;
+    let Builder{blocks, literals, mut functions, ..} = builder;
 
-    let (codes, line_data) = enclose_and_merge(blocks);
+    let (codes, line_data) = enclose_and_merge(blocks, &mut functions);
 
     println!("{:?}", &codes); // TODO: remove this
 
