@@ -6,10 +6,10 @@ use ast::stmt::{Stmt, StmtVisitor};
 use exception::Exception;
 use token::Token;
 use token::TokenType::*;
-use token::Literal;
+use program_data::{Literal, LineData};
+
 use vm::Module;
 use vm::Bytecode;
-use line_data::LineData;
 use symbol_table::SymbolTable;
 
 enum BranchType {
@@ -224,7 +224,7 @@ impl Builder {
     }
 
     fn branch_placeholder(&mut self, line: i32, branch_type: BranchType, label: Label) {
-        let index = self.current_subprog.borrow_mut().branch_placeholder(line, branch_type, label);
+        self.current_subprog.borrow_mut().branch_placeholder(line, branch_type, label);
     }
 
     fn set_label_position(&mut self, label: Label, position: usize) {

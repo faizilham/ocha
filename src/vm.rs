@@ -4,8 +4,9 @@ use exception::Exception;
 use exception::Exception::RuntimeErr;
 use heap::{Heap, Traceable, HeapPtr};
 use io::OchaIO;
-use line_data::LineData;
-use token::Literal;
+
+use program_data::{Literal, LineData};
+
 use value::{Value, OchaStr, VecList};
 use value::get_traceable;
 

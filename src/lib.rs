@@ -4,7 +4,7 @@ mod exception;
 mod heap;
 mod io;
 mod lexer;
-mod line_data;
+mod program_data;
 mod parser;
 mod symbol_table;
 mod token;

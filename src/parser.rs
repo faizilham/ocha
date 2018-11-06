@@ -4,7 +4,7 @@ use exception::Exception;
 use exception::Exception::ParseErr;
 use token::{TokenType, Token};
 use token::TokenType::*;
-use token::Literal;
+use program_data::Literal;
 
 // use EOF as padding
 static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [

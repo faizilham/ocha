@@ -1,3 +1,12 @@
+#[derive(Debug, Clone)]
+pub enum Literal {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    Str(String),
+    Nil
+}
+
 #[derive(Debug, Clone, Copy)]
 struct LineEncoding {
     count: usize,

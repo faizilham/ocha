@@ -1,3 +1,5 @@
+use program_data::Literal;
+
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
@@ -26,15 +28,6 @@ pub enum TokenType {
     PRINT, // temporarily, later will changed to standard lib function
 
     EOF
-}
-
-#[derive(Debug, Clone)]
-pub enum Literal {
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    Str(String),
-    Nil
 }
 
 #[derive(Debug)]

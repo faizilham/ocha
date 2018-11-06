@@ -3,7 +3,7 @@ output_dir = "src/ast"
 
 AST = {
     "Expr": (
-        [ "token::Token", "token::Literal"],
+        [ "token::Token", "program_data::Literal"],
         [
             "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
             "FuncCall   -> callee: Box<Expr>, args: Vec<Box<Expr>>",

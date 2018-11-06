@@ -2,7 +2,7 @@ use exception::Exception;
 use exception::Exception::ParseErr;
 use token::{Token, TokenType};
 use token::TokenType::*;
-use token::Literal;
+use program_data::Literal;
 
 pub fn scan(source_string : String) -> Result<Vec<Token>, Vec<Exception>> {
     let mut tokens = Vec::new();

@@ -1,5 +1,5 @@
 use token::Token;
-use token::Literal;
+use program_data::Literal;
 
 #[derive(Debug)]
 pub struct Expr {
