@@ -3,9 +3,7 @@ use std::cell::Cell;
 use std::cell::RefCell;
 
 use program_data::FunctionSignature;
-
-use super::heap::HeapPtr;
-use super::heap::Traceable;
+use heap::{HeapPtr, Traceable};
 
 /*** Value Declaration ***/
 
