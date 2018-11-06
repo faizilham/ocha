@@ -7,12 +7,10 @@ use program_data::{Literal, FunctionSignature, LineData};
 use vm::{Bytecode, Module};
 
 mod block;
-mod symbol_table;
 mod context;
 
 use self::block::{BranchType, Block, BlockRef, Label};
-use self::symbol_table::{SymbolType, SymbolTable, SymbolTableRef};
-use self::context::{Context, ContextRef};
+use self::context::{Context, ContextRef, SymbolTable, SymbolTableRef, SymbolType};
 use self::context::ContextType::*;
 
 pub fn build(statements: Vec<Box<Stmt>>) -> Result<Module, Vec<Exception>> {
@@ -73,7 +71,6 @@ struct Builder {
     last_line: i32,
 
     context: ContextRef,
-    symbol_table: SymbolTableRef,
 }
 
 type StmtResult = Result<bool, Exception>; // result: is statement returned
@@ -85,7 +82,6 @@ impl Builder {
         let blocks = vec![ current_subprog.clone() ];
         let context = Context::new_ref(MainCtx, None);
         let functions = vec![ FunctionSignature::new(0) ]; // first function = main function
-        let symbol_table = SymbolTable::new_ref(None);
 
         Builder {
             blocks,
@@ -94,7 +90,6 @@ impl Builder {
             functions,
             last_line: 0,
             context,
-            symbol_table,
         }
     }
 
@@ -146,24 +141,76 @@ impl Builder {
 
     // symbols
     fn add_var(&mut self, name: &Token) -> Result<isize, Exception> {
-        let mut symtable = self.symbol_table.borrow_mut();
+        let context = self.context.borrow_mut();
+        let mut symtable = context.local_symbols.borrow_mut();
         symtable.add_var(name)
     }
 
     fn add_func(&mut self, name: &Token, func_id: usize) -> Result<(), Exception> {
-        let mut symtable = self.symbol_table.borrow_mut();
+        let context = self.context.borrow_mut();
+        let mut symtable = context.local_symbols.borrow_mut();
         symtable.add_func(name, func_id)
+    }
+
+    fn add_args(&mut self, args: &Vec<Token>) -> Result<(), Exception> {
+        let context = self.context.borrow_mut();
+        let mut symtable = context.local_symbols.borrow_mut();
+
+        let offset_start = -(args.len() as isize + 3);
+
+        let mut i = 0;
+        for arg in args {
+            symtable.add_var_offset(arg, i + offset_start)?;
+            i += 1;
+        }
+
+        Ok(())
     }
 
     fn get_symbol(&self, name: &Token) -> Result<SymbolType, Exception> {
         // TODO: handle global variable & closure
-        let symtable = self.symbol_table.borrow();
 
-        if let Some(symbol) = symtable.get(name) {
-            return Ok(symbol);
+        let mut rf = self.context.clone();
+        let mut local = true;
+
+        loop {
+            rf = {
+                let context = rf.borrow();
+                let symtable = context.local_symbols.borrow();
+
+                if let Some(symbol) = symtable.get(name) {
+                    if !local && symbol.is_var() {
+                        return Err(
+                            Exception::ParseErr(name.line, String::from("Globals not implemented"))
+                        );
+                    }
+
+                    return Ok(symbol);
+                }
+
+                if let Some(parent) = &context.parent {
+                    parent.clone()
+                } else {
+                    return Err(SymbolTable::declare_err(name));
+                }
+            };
+
+            local = false;
         }
+    }
 
-        Err(SymbolTable::declare_err(name))
+    fn enter_scope(&mut self) -> SymbolTableRef {
+        let mut context = self.context.borrow_mut();
+        let current_symtable = context.local_symbols.clone();
+
+        context.local_symbols = SymbolTable::create_child(&current_symtable);
+
+        current_symtable
+    }
+
+    fn restore_scope(&mut self, symtable: SymbolTableRef) {
+        let mut context = self.context.borrow_mut();
+        context.local_symbols = symtable;
     }
 }
 
@@ -181,9 +228,7 @@ impl StmtVisitor<StmtResult> for Builder {
     }
 
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> StmtResult {
-        let current_symtable = self.symbol_table.clone();
-        let symtable = SymbolTable::create_child(&self.symbol_table);
-        self.symbol_table = symtable;
+        let current_symtable = self.enter_scope();
 
         let mut block_returned = false;
         for statement in body {
@@ -194,7 +239,7 @@ impl StmtVisitor<StmtResult> for Builder {
             }
         }
 
-        self.symbol_table = current_symtable;
+        self.restore_scope(current_symtable);
 
         Ok(block_returned)
     }
@@ -222,32 +267,20 @@ impl StmtVisitor<StmtResult> for Builder {
     fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>) -> StmtResult {
         let subprog = self.current_subprog.clone();
 
-        // start function block & context
+        // start function block
         let (func_block, func_id) = self.create_function_block(args.len());
         self.current_subprog = func_block;
 
+        // add function to current scope's symbol table
+        self.add_func(name, func_id)?;
+
+        // start new context
         let current_context = self.context.clone();
         let new_context = Context::create_child(&self.context, FuncCtx);
         self.context = new_context;
 
-        // add function to symbol table
-        self.add_func(name, func_id)?;
-
         // push new symbol table and put args inside it
-        let current_symtable = self.symbol_table.clone();
-        let symtable = SymbolTable::create_child(&self.symbol_table);
-        {
-            let mut rf = symtable.borrow_mut();
-            let offset_start = -(args.len() as isize + 3);
-
-            let mut i = 0;
-            for arg in args {
-                rf.add_var_offset(arg, i + offset_start)?;
-                i += 1;
-            }
-
-        }
-        self.symbol_table = symtable;
+        self.add_args(args)?;
 
         let mut block_returned = false;
 
@@ -267,7 +300,6 @@ impl StmtVisitor<StmtResult> for Builder {
 
         // TODO: handle restore on exception
         // end function block & context
-        self.symbol_table = current_symtable;
         self.current_subprog = subprog;
         self.context = current_context;
 
