@@ -6,6 +6,7 @@ mod io;
 mod lexer;
 mod program_data;
 mod parser;
+mod resolver;
 mod token;
 mod value;
 mod vm;

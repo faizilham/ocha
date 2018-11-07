@@ -3,7 +3,7 @@ output_dir = "src/ast"
 
 AST = {
     "Expr": (
-        [ "token::Token", "program_data::Literal"],
+        [ "token::Token", "program_data::Literal", "resolver::ResolverDataRef"],
         [
             "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
             "FuncCall   -> callee: Box<Expr>, args: Vec<Box<Expr>>",
@@ -13,12 +13,12 @@ AST = {
             "ListInit   -> exprs: Vec<Box<Expr>>",
             "Unary      -> operator: Token, expr: Box<Expr>",
             "Ternary    -> condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr>",
-            "Variable   -> name: Token"
+            "Variable   -> name: Token, resolve: ResolverDataRef"
         ]
     ),
 
     "Stmt":(
-        [ "ast::expr::Expr", "token::Token" ],
+        [ "ast::expr::Expr", "token::Token", "resolver::Enclosed" ],
         [
             "Assignment -> name: Token, expr: Box<Expr>",
             "Block      -> body: Vec<Box<Stmt>>",
@@ -29,7 +29,7 @@ AST = {
             "Print      -> exprs: Vec<Box<Expr>>",
             "Return     -> expr: Option<Box<Expr>>",
             "Set        -> get_expr: Box<Expr>, expr: Box<Expr>",
-            "VarDecl    -> name: Token, expr: Box<Expr>",
+            "VarDecl    -> name: Token, expr: Box<Expr>, enclosed: Enclosed",
             "While      -> condition: Box<Expr>, body: Box<Stmt>",
         ]
     )

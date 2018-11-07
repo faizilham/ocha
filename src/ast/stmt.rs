@@ -1,5 +1,6 @@
 use ast::expr::Expr;
 use token::Token;
+use resolver::Enclosed;
 
 #[derive(Debug)]
 pub struct Stmt {
@@ -17,7 +18,7 @@ pub enum StmtNode {
     Print { exprs: Vec<Box<Expr>> },
     Return { expr: Option<Box<Expr>> },
     Set { get_expr: Box<Expr>, expr: Box<Expr> },
-    VarDecl { name: Token, expr: Box<Expr> },
+    VarDecl { name: Token, expr: Box<Expr>, enclosed: Enclosed },
     While { condition: Box<Expr>, body: Box<Stmt> },
 }
 
@@ -31,7 +32,7 @@ pub trait StmtVisitor<T> {
     fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> T;
     fn visit_return(&mut self, expr: &Option<Box<Expr>>) -> T;
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> T;
-    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> T;
+    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, enclosed: &Enclosed) -> T;
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> T;
 }
 
@@ -50,7 +51,7 @@ impl Stmt {
             StmtNode::Print{exprs} => visitor.visit_print(exprs),
             StmtNode::Return{expr} => visitor.visit_return(expr),
             StmtNode::Set{get_expr, expr} => visitor.visit_set(get_expr, expr),
-            StmtNode::VarDecl{name, expr} => visitor.visit_vardecl(name, expr),
+            StmtNode::VarDecl{name, expr, enclosed} => visitor.visit_vardecl(name, expr, enclosed),
             StmtNode::While{condition, body} => visitor.visit_while(condition, body),
         }
     }

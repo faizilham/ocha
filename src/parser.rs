@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use ast::expr::{Expr, ExprNode};
 use ast::stmt::{Stmt, StmtNode};
 use exception::Exception;
@@ -5,6 +7,7 @@ use exception::Exception::ParseErr;
 use token::{TokenType, Token};
 use token::TokenType::*;
 use program_data::Literal;
+use resolver::{ResolverData, create_enclosed};
 
 // use EOF as padding
 static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
@@ -97,7 +100,7 @@ fn var_declaration(parser: &mut ParserState) -> StmtResult {
 
     parser.expect(SEMICOLON, "Expect ';' after variable declaration")?;
 
-    Ok(create_stmt(line, StmtNode::VarDecl { name, expr }))
+    Ok(create_stmt(line, StmtNode::VarDecl { name, expr, enclosed: create_enclosed() }))
 }
 
 fn func_declaration(parser: &mut ParserState) -> StmtResult {
@@ -207,7 +210,8 @@ fn assignment(parser: &mut ParserState, variable: Box<Expr>) -> StmtResult {
     parser.expect(SEMICOLON, "Expect ';' after expression")?;
 
     match variable.node {
-        ExprNode::Variable{ name } => Ok(create_stmt(line, StmtNode::Assignment{name, expr})),
+        ExprNode::Variable{ name, .. } =>
+            Ok(create_stmt(line, StmtNode::Assignment{name, expr})),
         ExprNode::Get {..} => Ok(create_stmt(line, StmtNode::Set{get_expr: variable, expr})),
         _ => Err(parser.exception("Invalid assignment target"))
     }
@@ -357,7 +361,7 @@ fn primary(parser: &mut ParserState) -> ExprResult {
 
     let expr = match token.token_type {
         NUMBER | NIL | TRUE | FALSE | STRING => create_expr(token.line, ExprNode::Literal { value: token.literal }),
-        IDENTIFIER => create_expr(token.line, ExprNode::Variable{name: token}),
+        IDENTIFIER => create_expr(token.line, ExprNode::Variable{name: token, resolve: ResolverData::new_ref()}),
         LEFT_SQUARE => return list_init(parser),
         LEFT_PAREN => return grouping(parser),
         _ => return Err(parser.exception("Expect expression"))

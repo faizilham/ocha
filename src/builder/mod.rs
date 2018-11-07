@@ -4,6 +4,7 @@ use exception::Exception;
 use token::Token;
 use token::TokenType::*;
 use program_data::{Literal, FunctionSignature, LineData};
+use resolver::{Enclosed, ResolverDataRef};
 use vm::{Bytecode, Module};
 
 mod block;
@@ -426,7 +427,7 @@ impl StmtVisitor<StmtResult> for Builder {
         }
     }
 
-    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>) -> StmtResult {
+    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, enclosed: &Enclosed) -> StmtResult {
         self.add_var(name)?;
         self.generate_expr(expr)?;
 
@@ -602,7 +603,7 @@ impl ExprVisitor<ExprResult> for Builder {
         Ok(())
     }
 
-    fn visit_variable(&mut self, name: &Token) -> ExprResult {
+    fn visit_variable(&mut self, name: &Token, resolve: &ResolverDataRef) -> ExprResult {
         use self::ResolveType::*;
 
         // TODO: handle closure
