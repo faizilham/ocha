@@ -4,10 +4,8 @@ print(nil);                         // nil
 print(true);                        // true
 print(false);                       // false
 
-print(1 + 1);                       // 2
-print(2 * 3);                       // 6
-print(2 - 6);                       // -4
-print(1.0 / -2);                    // -0.5
+print((1 + 2 * (3 - 1)) / -2.0);    // -2.5
+print(3 / 2);                       // 1
 
 print(1 < 2);                       // true
 print(1 > 10);                      // false
