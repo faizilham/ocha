@@ -22,7 +22,7 @@ pub enum Bytecode {
     BOOL(bool),
 
     // memory
-    POP,
+    POP(usize),
     STORE(isize),
     LOAD(isize),
 
@@ -158,8 +158,9 @@ impl<'io> VM<'io> {
                 },
 
                 // memory
-                POP => {
-                    self.pop();
+                POP(count) => {
+                    let new_len = self.stack.len() - count;
+                    self.stack.truncate(new_len);
                 },
 
                 STORE(offset) => {

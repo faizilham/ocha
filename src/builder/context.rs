@@ -132,6 +132,10 @@ impl SymbolTable {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.symbols.len()
+    }
+
     pub fn declare_err(name: &Token) -> Exception {
         ParseErr(name.line, format!("Identifier '{}' is not declared", &name.lexeme))
     }

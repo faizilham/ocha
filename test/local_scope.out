@@ -1,4 +1,5 @@
 out
 inner b_out
 inner2 b_in
-out
+inner b_in c_in
+out c_out

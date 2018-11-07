@@ -199,6 +199,13 @@ impl Builder {
         }
     }
 
+    fn count_symbols(&self) -> usize {
+        let context = self.context.borrow();
+        let symtable = context.local_symbols.borrow();
+
+        symtable.len()
+    }
+
     fn enter_scope(&mut self) -> SymbolTableRef {
         let mut context = self.context.borrow_mut();
         let current_symtable = context.local_symbols.clone();
@@ -239,6 +246,13 @@ impl StmtVisitor<StmtResult> for Builder {
             }
         }
 
+        // pop local scope variables
+        let count = self.count_symbols();
+        let line = self.last_line;
+        self.emit(line, Bytecode::POP(count));
+
+        // TODO: handle restore on exception
+
         self.restore_scope(current_symtable);
 
         Ok(block_returned)
@@ -259,7 +273,7 @@ impl StmtVisitor<StmtResult> for Builder {
     fn visit_expression(&mut self, expr: &Box<Expr>) -> StmtResult {
         let line = self.last_line;
         self.generate_expr(expr)?;
-        self.emit(line, Bytecode::POP);
+        self.emit(line, Bytecode::POP(1));
 
         Ok(false)
     }
@@ -293,12 +307,17 @@ impl StmtVisitor<StmtResult> for Builder {
         }
 
         if !block_returned {
+            // add empty return if not yet exist
+
             let line = self.last_line;
             self.emit(line, Bytecode::NIL);
             self.emit(line, Bytecode::RET);
         }
 
+        // NOTE: no need to pop local var here, as it already handle by RET
+
         // TODO: handle restore on exception
+
         // end function block & context
         self.current_subprog = subprog;
         self.context = current_context;

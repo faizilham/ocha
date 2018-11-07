@@ -14,6 +14,12 @@ if (true) {
         let a = "inner2";
         print(a, b);            // inner2 b_in
     }
+
+    let c = "c_in";
+
+    print(a, b, c);             // inner b_in c_in
 }
 
-print(a);                       // out
+let c = "c_out";
+
+print(a, c);                    // out c_out
