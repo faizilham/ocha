@@ -1,0 +1,27 @@
+let count = 0;
+
+fn counter1() {
+    count = count + 1;
+    print(count);
+}
+
+fn makeCounter() {
+    fn counter1() {
+        let a = 1;
+        count = count + a;
+        print("inner", count);
+    }
+
+    return counter1;
+}
+
+let counter2 = makeCounter();
+
+counter1();                         // 1
+counter1();                         // 2
+counter2();                         // inner 3
+counter2();                         // inner 4
+counter1();                         // 5
+counter2();                         // inner 6
+counter1();                         // 7
+counter2();                         // inner 8

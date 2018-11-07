@@ -113,6 +113,11 @@ mod test {
         test("local_scope");
     }
 
+    #[test]
+    fn test_global() {
+        test("global");
+    }
+
     // test helper funcitons
     use super::run_file_with_io;
     use std::fs::File;

@@ -76,11 +76,18 @@ struct Builder {
 type StmtResult = Result<bool, Exception>; // result: is statement returned
 type ExprResult = Result<(), Exception>;
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum ResolveType {
+    Global,
+    Local,
+    Closure(usize)
+}
+
 impl Builder {
     fn new () -> Builder {
         let current_subprog = Block::new_ref();
         let blocks = vec![ current_subprog.clone() ];
-        let context = Context::new_ref(MainCtx, None);
+        let context = Context::new_ref(GlobalCtx, None);
         let functions = vec![ FunctionSignature::new(0) ]; // first function = main function
 
         Builder {
@@ -167,11 +174,10 @@ impl Builder {
         Ok(())
     }
 
-    fn get_symbol(&self, name: &Token) -> Result<SymbolType, Exception> {
-        // TODO: handle global variable & closure
+    fn get_symbol(&self, name: &Token) -> Result<(SymbolType, ResolveType), Exception> {
 
         let mut rf = self.context.clone();
-        let mut local = true;
+        let mut level = 0;
 
         loop {
             rf = {
@@ -179,13 +185,20 @@ impl Builder {
                 let symtable = context.local_symbols.borrow();
 
                 if let Some(symbol) = symtable.get(name) {
-                    if !local && symbol.is_var() {
-                        return Err(
-                            Exception::ParseErr(name.line, String::from("Globals not implemented"))
-                        );
-                    }
+                    let is_local = level == 0;
+                    let is_var = symbol.is_var();
+                    let ctx_type = context.ctx_type;
 
-                    return Ok(symbol);
+                    let resolve =
+                        if !is_var || ctx_type == GlobalCtx {
+                            ResolveType::Global
+                        } else if is_local {
+                            ResolveType::Local
+                        } else {
+                            ResolveType::Closure(level)
+                        };
+
+                    return Ok((symbol, resolve));
                 }
 
                 if let Some(parent) = &context.parent {
@@ -195,7 +208,7 @@ impl Builder {
                 }
             };
 
-            local = false;
+            level += 1;
         }
     }
 
@@ -223,11 +236,17 @@ impl Builder {
 
 impl StmtVisitor<StmtResult> for Builder {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> StmtResult {
-
-        // TODO: handle global variable & closure
-        if let SymbolType::Var(offset) = self.get_symbol(name)? {
+        if let (SymbolType::Var(offset), resolve) = self.get_symbol(name)? {
             self.generate_expr(expr)?;
-            self.emit(name.line, Bytecode::STORE(offset));
+
+            // TODO: handle closure
+            let bytecode = match resolve {
+                ResolveType::Global     => Bytecode::STORE_GLOBAL(offset),
+                ResolveType::Local      => Bytecode::STORE(offset),
+                ResolveType::Closure(_) => unimplemented!(),
+            };
+
+            self.emit(name.line, bytecode);
             return Ok(false);
         }
 
@@ -584,11 +603,17 @@ impl ExprVisitor<ExprResult> for Builder {
     }
 
     fn visit_variable(&mut self, name: &Token) -> ExprResult {
+        use self::ResolveType::*;
 
-        // TODO: handle global variable & closure
+        // TODO: handle closure
         let bytecode = match self.get_symbol(name)? {
-            SymbolType::Var(offset) => Bytecode::LOAD(offset),
-            SymbolType::Func(id) => Bytecode::LOAD_FUNC(id),
+            (SymbolType::Var(offset), resolve) =>
+                match resolve {
+                    Global      => Bytecode::LOAD_GLOBAL(offset),
+                    Local       => Bytecode::LOAD(offset),
+                    Closure(_)  => unimplemented!(),
+                },
+            (SymbolType::Func(id), _)          => Bytecode::LOAD_FUNC(id),
         };
 
         self.emit(name.line, bytecode);

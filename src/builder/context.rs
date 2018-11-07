@@ -11,7 +11,7 @@ use super::block::Label;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ContextType {
-    MainCtx,
+    GlobalCtx,
     FuncCtx,
 }
 
@@ -41,9 +41,7 @@ impl Context {
     }
 }
 
-
 // Symbol tables
-
 
 #[derive(Debug, Clone, Copy)]
 pub enum SymbolType {

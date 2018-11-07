@@ -25,6 +25,8 @@ pub enum Bytecode {
     POP(usize),
     STORE(isize),
     LOAD(isize),
+    STORE_GLOBAL(isize),
+    LOAD_GLOBAL(isize),
 
     // math & logic
     ADD,
@@ -164,18 +166,21 @@ impl<'io> VM<'io> {
                 },
 
                 STORE(offset) => {
-                    let value = self.pop();
-                    let pos = (self.fp as isize) + offset;
-
-                    let var = self.stack.get_mut(pos as usize).expect("Invalid stack access");
-                    *var = value;
+                    let fp = self.fp;
+                    self.store(fp, offset);
                 },
 
                 LOAD(offset) => {
-                    let pos = (self.fp as isize) + offset;
-                    let value = self.stack.get(pos as usize)
-                        .expect("Invalid stack access").clone();
-                    self.stack.push(value);
+                    let fp = self.fp;
+                    self.load(fp, offset);
+                },
+
+                STORE_GLOBAL(offset) => {
+                    self.store(0, offset);
+                },
+
+                LOAD_GLOBAL(offset) => {
+                  self.load(0, offset);
                 },
 
                 ADD => {
@@ -454,6 +459,21 @@ impl<'io> VM<'io> {
         } else {
             panic!("Stack underflow");
         }
+    }
+
+    fn store(&mut self, start: usize, offset: isize) {
+        let value = self.pop();
+        let pos = (start as isize) + offset;
+
+        let var = self.stack.get_mut(pos as usize).expect("Invalid stack access");
+        *var = value;
+    }
+
+    fn load (&mut self, start : usize, offset: isize) {
+        let pos = (start as isize) + offset;
+        let value = self.stack.get(pos as usize)
+            .expect("Invalid stack access").clone();
+        self.stack.push(value);
     }
 
     fn get_constant(&self, idx : usize) -> Value {
