@@ -1,4 +1,7 @@
-let a = "test";
+let a;
+
+print(a);               // nil
+a = "test";
 
 print(a);               // test
 
