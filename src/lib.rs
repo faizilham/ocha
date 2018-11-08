@@ -125,6 +125,11 @@ mod test {
     // Error cases
 
     #[test]
+    fn test_err_parser() {
+        test_err("err_parser");
+    }
+
+    #[test]
     fn test_err_resolver() {
         test_err("err_resolver");
     }

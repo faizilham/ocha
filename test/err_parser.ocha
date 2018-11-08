@@ -1,0 +1,20 @@
+break;                  // invalid break
+return;                 // invalid return
+
+// TODO: fix parser error synchronization behavior
+/*
+while (true) {
+    fn t() {
+        break;          // invalid break
+    }
+
+    while (true) {
+        break;
+        return;         // invalid return
+    }
+
+    return;             // invalid return
+}
+
+break;                  // invalid break;
+*/

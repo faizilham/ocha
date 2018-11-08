@@ -59,7 +59,7 @@ fn sync(parser: &mut ParserState) -> Result<(), ()>{
             let current = parser.peek().ok_or(())?;
 
             match current.token_type {
-                FN | LET | IF | WHILE | PRINT | RETURN => {
+                FN | LET | IF | WHILE | PRINT | BREAK | RETURN => {
                     return Ok(());
                 }
 
@@ -124,14 +124,23 @@ fn func_declaration(parser: &mut ParserState) -> StmtResult {
 
     parser.expect(RIGHT_PAREN, "Expect ')' after params")?;
 
-    // read body
     parser.expect(LEFT_BRACE, "Expect '{' after function signature")?;
 
-    let body = read_block(parser)?;
-    let id = new_pcell(0);
-    let has_captured = new_pcell(false);
+    let current_loop_level = parser.loop_level;
+    parser.func_level += 1;
+    parser.loop_level = 0;
 
-    Ok(create_stmt(line, StmtNode::FuncDecl { name, args, body, id, has_captured }))
+    // read body
+    let result = read_block(parser).map(|body| {
+        let id = new_pcell(0);
+        let has_captured = new_pcell(false);
+        create_stmt(line, StmtNode::FuncDecl { name, args, body, id, has_captured })
+    });
+
+    parser.func_level -= 1;
+    parser.loop_level = current_loop_level;
+
+    result
 }
 
 fn statement(parser: &mut ParserState) -> StmtResult {
@@ -175,6 +184,11 @@ fn block(parser: &mut ParserState) -> StmtResult {
 
 fn break_statement(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
+
+    if parser.loop_level < 1 {
+        return Err(parser.exception("Invalid break outside of loop"));
+    }
+
     parser.expect(SEMICOLON, "Expect ';' after break")?;
 
     Ok(create_stmt(line, StmtNode::Break))
@@ -182,6 +196,10 @@ fn break_statement(parser: &mut ParserState) -> StmtResult {
 
 fn return_statement(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
+
+    if parser.func_level < 1 {
+        return Err(parser.exception("Invalid return outside of function"));
+    }
 
     let expr = if !parser.peek_eq(SEMICOLON) {
         Some(expression(parser)?)
@@ -245,8 +263,15 @@ fn while_statement(parser: &mut ParserState) -> StmtResult {
     let condition = expression(parser)?;
     parser.expect(RIGHT_PAREN, "Expect ')' after condition")?;
 
-    let body = statement(parser)?;
-    Ok(create_stmt(line, StmtNode::While { condition, body }))
+    parser.loop_level += 1;
+
+    let result = statement(parser).map( |body|
+        create_stmt(line, StmtNode::While { condition, body })
+    );
+
+    parser.loop_level -= 1;
+
+    result
 }
 
 fn print_statement(parser: &mut ParserState) -> StmtResult {
@@ -413,11 +438,14 @@ fn create_expr(line: i32, node: ExprNode) -> Box<Expr> {
 struct ParserState {
     tokens: Vec<Token>,
     last_line: i32,
+
+    loop_level: i32,
+    func_level: i32
 }
 
 impl ParserState {
     fn new(tokens : Vec<Token>) -> ParserState {
-        ParserState{ tokens: tokens, last_line: 1 }
+        ParserState{ tokens: tokens, last_line: 1, loop_level: 0, func_level: 0 }
     }
 
     fn at_end(&self) -> bool{
