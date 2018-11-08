@@ -79,7 +79,7 @@ fn report_exceptions(io: &mut OchaIO, exceptions: Vec<Exception>) -> () {
 // integration test
 #[cfg(test)]
 mod test {
-
+    // Success cases
     #[test]
     fn test_expression() {
         test("expression");
@@ -120,6 +120,13 @@ mod test {
         test("global");
     }
 
+    // Error cases
+
+    #[test]
+    fn test_err_resolver() {
+        test_err("err_resolver");
+    }
+
     // test helper funcitons
     use super::run_file_with_io;
     use std::fs::File;
@@ -158,6 +165,28 @@ mod test {
         let MockIO { out, .. } = io;
 
         assert_eq!(out, expected);
+    }
+
+    fn test_err(testname: &str) {
+        let out_file = format!("test/{}.out", testname);
+        let ocha_file = format!("test/{}.ocha", testname);
+
+        let expected = read_output(out_file);
+
+        let (result, io) = run_test(ocha_file);
+
+        assert_eq!(result, Err(()));
+
+        let MockIO { err, .. } = io;
+
+        assert_eq!(err.len(), expected.len());
+
+        for (e, exp) in err.iter().zip(expected.iter()) {
+            let e = e.to_lowercase();
+            let exp = exp.to_lowercase();
+
+            assert!(e.contains(&exp))
+        }
     }
 
     // Mock IO object

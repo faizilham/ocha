@@ -1,0 +1,13 @@
+fn f () {}
+
+a = 10; // not declared
+f = 10; // can't assign value
+
+if (true) {
+    let b;
+}
+
+b = 10; // not declared
+
+return; // invalid return
+break; // invalid break
