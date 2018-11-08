@@ -1,6 +1,4 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-
+use helper::{PRefCell, new_prefcell};
 use std::collections::HashMap;
 
 use exception::Exception;
@@ -11,31 +9,6 @@ use token::Token;
 pub enum ContextType {
     GlobalCtx,
     FuncCtx,
-}
-
-pub struct Context {
-    pub ctx_type: ContextType,
-    pub parent: Option<ContextRef>,
-    pub local_symbols: SymbolTableRef,
-}
-
-pub type ContextRef = Rc<RefCell<Context>>;
-
-impl Context {
-    pub fn new(ctx_type: ContextType, parent: Option<ContextRef>) -> Context {
-        let local_symbols = SymbolTable::new_ref(None);
-        Context{ ctx_type, parent, local_symbols }
-    }
-
-    pub fn new_ref(ctx_type: ContextType, parent: Option<ContextRef>) -> ContextRef {
-        let ctx = Context::new(ctx_type, parent);
-
-        Rc::new(RefCell::new(ctx))
-    }
-
-    pub fn create_child(parent: &ContextRef, ctx_type: ContextType) -> ContextRef {
-        Context::new_ref(ctx_type, Some(parent.clone()))
-    }
 }
 
 // Symbol tables
@@ -59,32 +32,47 @@ impl SymbolType {
 pub struct SymbolTable {
     symbols: HashMap<String, SymbolType>,
     var_offset: isize,
+    pub context_type: ContextType,
+    pub context_level: usize,
+    pub scope_level: usize,
 
     pub parent: Option<SymbolTableRef>, // parent scope in the same context
 }
 
-pub type SymbolTableRef = Rc<RefCell<SymbolTable>>;
+pub type SymbolTableRef = PRefCell<SymbolTable>;
 
 impl SymbolTable {
-    pub fn new (parent: Option<SymbolTableRef>) -> SymbolTable {
+    pub fn new (context_type: ContextType, context_level: usize, scope_level: usize, parent: Option<SymbolTableRef>) -> SymbolTable {
+        let mut var_offset = 0;
 
-        let var_offset = match &parent {
-            None => 0,
-            Some(symtable) => {
-                let rf = symtable.borrow();
-                rf.var_offset
-            }
+        if let Some(symtable) = &parent {
+            let rf = symtable.borrow();
+            var_offset = rf.var_offset;
+        }
+
+        SymbolTable { symbols: HashMap::new(), var_offset, context_type, context_level, scope_level, parent }
+    }
+
+    pub fn new_ref(context_type: ContextType, context_level: usize, scope_level: usize, parent: Option<SymbolTableRef>) -> SymbolTableRef {
+        new_prefcell(SymbolTable::new(context_type, context_level, scope_level, parent))
+    }
+
+    pub fn create_local_scope(parent: &SymbolTableRef) -> SymbolTableRef {
+        let (context_type, context_level, scope_level) = {
+            let symtable = parent.borrow();
+            (symtable.context_type, symtable.context_level, symtable.scope_level)
         };
 
-        SymbolTable { symbols: HashMap::new(), var_offset, parent }
+        SymbolTable::new_ref(context_type, context_level, scope_level + 1, Some(parent.clone()))
     }
 
-    pub fn new_ref(parent: Option<SymbolTableRef>) -> SymbolTableRef {
-        Rc::new(RefCell::new(SymbolTable::new(parent)))
-    }
+    pub fn create_function_scope(parent: &SymbolTableRef) -> SymbolTableRef {
+        let (context_type, context_level) = {
+            let symtable = parent.borrow();
+            (ContextType::FuncCtx, symtable.context_level + 1)
+        };
 
-    pub fn create_child(parent: &SymbolTableRef) -> SymbolTableRef {
-        SymbolTable::new_ref(Some(parent.clone()))
+        SymbolTable::new_ref(context_type, context_level, 0, Some(parent.clone()))
     }
 
     fn add(&mut self, name: &Token, symbol: SymbolType) -> Result<(), Exception> {
@@ -117,11 +105,7 @@ impl SymbolTable {
 
     pub fn get(&self, name: &Token) -> Option<SymbolType> {
         if let Some(symbol) = self.symbols.get(&name.lexeme) {
-            return Some(*symbol);
-        }
-
-        if let Some(parent) = &self.parent {
-            parent.borrow().get(name)
+            Some(*symbol)
         } else {
             None
         }
