@@ -47,7 +47,10 @@ impl SymbolTable {
 
         if let Some(symtable) = &parent {
             let rf = symtable.borrow();
-            var_offset = rf.var_offset;
+
+            if scope_level > 0 {
+                var_offset = rf.var_offset;
+            }
         }
 
         SymbolTable { symbols: HashMap::new(), var_offset, context_type, context_level, scope_level, parent }
