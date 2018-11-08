@@ -3,7 +3,7 @@ output_dir = "src/ast"
 
 AST = {
     "Expr": (
-        [ "token::Token", "program_data::Literal", "resolver::ResolverDataRef"],
+        [ "token::Token", "program_data::Literal", "resolver::ResolverData"],
         [
             "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
             "FuncCall   -> callee: Box<Expr>, args: Vec<Box<Expr>>",
@@ -13,23 +13,23 @@ AST = {
             "ListInit   -> exprs: Vec<Box<Expr>>",
             "Unary      -> operator: Token, expr: Box<Expr>",
             "Ternary    -> condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr>",
-            "Variable   -> name: Token, resolve: ResolverDataRef"
+            "Variable   -> name: Token, resolve: ResolverData"
         ]
     ),
 
     "Stmt":(
-        [ "ast::expr::Expr", "token::Token", "resolver::Enclosed" ],
+        [ "ast::expr::Expr", "token::Token", "helper::PCell" ],
         [
             "Assignment -> name: Token, expr: Box<Expr>",
-            "Block      -> body: Vec<Box<Stmt>>",
+            "Block      -> body: Vec<Box<Stmt>>, has_captured: PCell<bool>",
             "Break      -> ",
             "Expression -> expr: Box<Expr>",
-            "FuncDecl   -> name: Token, args: Vec<Token>, body: Vec<Box<Stmt>>",
+            "FuncDecl   -> name: Token, args: Vec<Token>, body: Vec<Box<Stmt>>, has_captured: PCell<bool>",
             "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>",
             "Return     -> expr: Option<Box<Expr>>",
             "Set        -> get_expr: Box<Expr>, expr: Box<Expr>",
-            "VarDecl    -> name: Token, expr: Box<Expr>, enclosed: Enclosed",
+            "VarDecl    -> name: Token, expr: Box<Expr>, is_captured: PCell<bool>",
             "While      -> condition: Box<Expr>, body: Box<Stmt>",
         ]
     )

@@ -1,13 +1,12 @@
-use std::cell::Cell;
-
 use ast::expr::{Expr, ExprNode};
 use ast::stmt::{Stmt, StmtNode};
 use exception::Exception;
 use exception::Exception::ParseErr;
+use helper::{PCell, new_pcell};
 use token::{TokenType, Token};
 use token::TokenType::*;
 use program_data::Literal;
-use resolver::{ResolverData, create_enclosed};
+use resolver::{ResolverData};
 
 // use EOF as padding
 static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
@@ -100,7 +99,7 @@ fn var_declaration(parser: &mut ParserState) -> StmtResult {
 
     parser.expect(SEMICOLON, "Expect ';' after variable declaration")?;
 
-    Ok(create_stmt(line, StmtNode::VarDecl { name, expr, enclosed: create_enclosed() }))
+    Ok(create_stmt(line, StmtNode::VarDecl { name, expr, is_captured: new_pcell(false) }))
 }
 
 fn func_declaration(parser: &mut ParserState) -> StmtResult {
@@ -129,8 +128,9 @@ fn func_declaration(parser: &mut ParserState) -> StmtResult {
     parser.expect(LEFT_BRACE, "Expect '{' after function signature")?;
 
     let body = read_block(parser)?;
+    let has_captured = new_pcell(false);
 
-    Ok(create_stmt(line, StmtNode::FuncDecl { name, args, body }))
+    Ok(create_stmt(line, StmtNode::FuncDecl { name, args, body, has_captured }))
 }
 
 fn statement(parser: &mut ParserState) -> StmtResult {
@@ -166,8 +166,9 @@ fn read_block(parser: &mut ParserState) -> Result<Vec<Box<Stmt>>, Exception> {
 fn block(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
     let body = read_block(parser)?;
+    let has_captured = new_pcell(false);
 
-    Ok(create_stmt(line, StmtNode::Block { body }))
+    Ok(create_stmt(line, StmtNode::Block { body, has_captured }))
 }
 
 fn break_statement(parser: &mut ParserState) -> StmtResult {
@@ -361,7 +362,7 @@ fn primary(parser: &mut ParserState) -> ExprResult {
 
     let expr = match token.token_type {
         NUMBER | NIL | TRUE | FALSE | STRING => create_expr(token.line, ExprNode::Literal { value: token.literal }),
-        IDENTIFIER => create_expr(token.line, ExprNode::Variable{name: token, resolve: ResolverData::new_ref()}),
+        IDENTIFIER => create_expr(token.line, ExprNode::Variable{name: token, resolve: ResolverData::new()}),
         LEFT_SQUARE => return list_init(parser),
         LEFT_PAREN => return grouping(parser),
         _ => return Err(parser.exception("Expect expression"))

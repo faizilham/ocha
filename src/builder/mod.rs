@@ -1,10 +1,11 @@
 use ast::expr::{Expr, ExprNode, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
 use exception::Exception;
+use helper::PCell;
 use token::Token;
 use token::TokenType::*;
 use program_data::{Literal, FunctionSignature, LineData};
-use resolver::{Enclosed, ResolverDataRef};
+use resolver::ResolverData;
 use vm::{Bytecode, Module};
 
 mod block;
@@ -254,7 +255,7 @@ impl StmtVisitor<StmtResult> for Builder {
         error(name.line, "Can't assign value to function")
     }
 
-    fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> StmtResult {
+    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>) -> StmtResult {
         let current_symtable = self.enter_scope();
 
         let mut block_returned = false;
@@ -298,7 +299,7 @@ impl StmtVisitor<StmtResult> for Builder {
         Ok(false)
     }
 
-    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>) -> StmtResult {
+    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>) -> StmtResult {
         let subprog = self.current_subprog.clone();
 
         // start function block
@@ -427,7 +428,7 @@ impl StmtVisitor<StmtResult> for Builder {
         }
     }
 
-    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, enclosed: &Enclosed) -> StmtResult {
+    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, is_captured: &PCell<bool>) -> StmtResult {
         self.add_var(name)?;
         self.generate_expr(expr)?;
 
@@ -603,7 +604,7 @@ impl ExprVisitor<ExprResult> for Builder {
         Ok(())
     }
 
-    fn visit_variable(&mut self, name: &Token, resolve: &ResolverDataRef) -> ExprResult {
+    fn visit_variable(&mut self, name: &Token, resolve: &ResolverData) -> ExprResult {
         use self::ResolveType::*;
 
         // TODO: handle closure

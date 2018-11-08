@@ -1,6 +1,6 @@
 use token::Token;
 use program_data::Literal;
-use resolver::ResolverDataRef;
+use resolver::ResolverData;
 
 #[derive(Debug)]
 pub struct Expr {
@@ -17,7 +17,7 @@ pub enum ExprNode {
     ListInit { exprs: Vec<Box<Expr>> },
     Unary { operator: Token, expr: Box<Expr> },
     Ternary { condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr> },
-    Variable { name: Token, resolve: ResolverDataRef },
+    Variable { name: Token, resolve: ResolverData },
 }
 
 pub trait ExprVisitor<T> {
@@ -29,7 +29,7 @@ pub trait ExprVisitor<T> {
     fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> T;
     fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> T;
     fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> T;
-    fn visit_variable(&mut self, name: &Token, resolve: &ResolverDataRef) -> T;
+    fn visit_variable(&mut self, name: &Token, resolve: &ResolverData) -> T;
 }
 
 impl Expr {

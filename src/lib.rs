@@ -2,6 +2,7 @@ mod ast;
 mod builder;
 mod exception;
 mod heap;
+mod helper;
 mod io;
 mod lexer;
 mod program_data;

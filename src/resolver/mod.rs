@@ -1,8 +1,7 @@
-use std::rc::Rc;
-use std::cell::{Cell, RefCell};
 
 use ast::expr::{Expr, ExprNode, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
+use helper::{PCell, new_pcell};
 use program_data::Literal;
 use token::Token;
 use exception::Exception;
@@ -12,12 +11,6 @@ mod context;
 pub use self::context::SymbolType;
 use self::context::{Context, ContextType, ContextRef, SymbolTable, SymbolTableRef};
 
-pub type Enclosed = Rc<Cell<bool>>;
-
-pub fn create_enclosed() -> Enclosed {
-    Rc::new(Cell::new(false))
-}
-
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ResolveType {
     Global,
@@ -25,13 +18,11 @@ pub enum ResolveType {
     Closure(usize)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct ResolverData {
-    pub resolve_type: ResolveType,
-    pub symbol_type: SymbolType,
+    pub resolve_type: PCell<ResolveType>,
+    pub symbol_type: PCell<SymbolType>,
 }
-
-pub type ResolverDataRef = Rc<RefCell<ResolverData>>;
 
 use self::SymbolType::*;
 use self::ResolveType::*;
@@ -39,11 +30,7 @@ use self::ContextType::*;
 
 impl ResolverData {
     pub fn new() -> ResolverData {
-        ResolverData {resolve_type: Global, symbol_type: Var(0)}
-    }
-
-    pub fn new_ref() -> ResolverDataRef {
-        Rc::new(RefCell::new(ResolverData::new()))
+        ResolverData {resolve_type: new_pcell(Global), symbol_type: new_pcell(Var(0))}
     }
 }
 
@@ -168,7 +155,7 @@ impl StmtVisitor<StmtResult> for Resolver {
         self.resolve_expr(expr)
     }
 
-    fn visit_block(&mut self, body: &Vec<Box<Stmt>>) -> StmtResult {
+    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>) -> StmtResult {
         unimplemented!();
     }
 
@@ -181,7 +168,7 @@ impl StmtVisitor<StmtResult> for Resolver {
         Ok(())
     }
 
-    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>) -> StmtResult {
+    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>) -> StmtResult {
         unimplemented!();
     }
 
@@ -226,7 +213,7 @@ impl StmtVisitor<StmtResult> for Resolver {
         Ok(())
     }
 
-    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, enclosed: &Enclosed) -> StmtResult {
+    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, is_captured: &PCell<bool>) -> StmtResult {
         unimplemented!();
     }
 
@@ -290,12 +277,11 @@ impl ExprVisitor<ExprResult> for Resolver {
         Ok(())
     }
 
-    fn visit_variable(&mut self, name: &Token, resolve: &ResolverDataRef) -> ExprResult {
+    fn visit_variable(&mut self, name: &Token, resolve: &ResolverData) -> ExprResult {
         let (symbol_type, resolve_type) = self.get_symbol(name)?;
 
-        let mut res_data = resolve.borrow_mut();
-        (*res_data).symbol_type = symbol_type;
-        (*res_data).resolve_type = resolve_type;
+        resolve.symbol_type.set(symbol_type);
+        resolve.resolve_type.set(resolve_type);
 
         Ok(())
     }
