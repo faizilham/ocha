@@ -8,6 +8,3 @@ if (true) {
 }
 
 b = 10; // not declared
-
-return; // invalid return
-break; // invalid break

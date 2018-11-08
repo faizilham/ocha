@@ -5,18 +5,15 @@ use helper::PCell;
 use token::Token;
 use token::TokenType::*;
 use program_data::{Literal, FunctionSignature, LineData};
-use resolver::ResolverData;
+use resolver::{ResolverData, ResolveType, SymbolType};
 use vm::{Bytecode, Module};
 
 mod block;
-mod context;
 
 use self::block::{BranchType, Block, BlockRef, Label};
-use self::context::{Context, ContextRef, SymbolTable, SymbolTableRef, SymbolType};
-use self::context::ContextType::*;
 
-pub fn build(statements: Vec<Box<Stmt>>) -> Result<Module, Vec<Exception>> {
-    let mut builder = Builder::new();
+pub fn build(statements: Vec<Box<Stmt>>, function_signatures: Vec<FunctionSignature>) -> Result<Module, Vec<Exception>> {
+    let mut builder = Builder::new(function_signatures);
 
     let mut errors = Vec::new();
 
@@ -71,26 +68,21 @@ struct Builder {
     functions: Vec<FunctionSignature>,
 
     last_line: i32,
-
-    context: ContextRef,
+    loop_end_label: Label,
 }
 
 type StmtResult = Result<bool, Exception>; // result: is statement returned
 type ExprResult = Result<(), Exception>;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-enum ResolveType {
-    Global,
-    Local,
-    Closure(usize)
-}
-
 impl Builder {
-    fn new () -> Builder {
-        let current_subprog = Block::new_ref();
-        let blocks = vec![ current_subprog.clone() ];
-        let context = Context::new_ref(GlobalCtx, None);
-        let functions = vec![ FunctionSignature::new(0) ]; // first function = main function
+    fn new (functions : Vec<FunctionSignature>) -> Builder {
+        let mut blocks = Vec::with_capacity(functions.len());
+
+        for _ in &functions {
+            blocks.push(Block::new_ref());
+        }
+
+        let current_subprog = blocks.get(0).expect("Invalid block in builder").clone();
 
         Builder {
             blocks,
@@ -98,7 +90,7 @@ impl Builder {
             literals: Vec::new(),
             functions,
             last_line: 0,
-            context,
+            loop_end_label: -1,
         }
     }
 
@@ -114,14 +106,8 @@ impl Builder {
     }
 
     // block management
-    fn create_function_block(&mut self, num_args: usize) -> (BlockRef, usize) {
-        let block = Block::new_ref();
-        self.blocks.push(block.clone());
-
-        let func_id = self.functions.len();
-        self.functions.push(FunctionSignature::new(num_args));
-
-        (block, func_id)
+    fn get_function_block(&mut self, func_id : usize) -> BlockRef {
+        self.blocks.get(func_id).expect("Invalid block in builder").clone()
     }
 
     // code emitter functions
@@ -147,102 +133,15 @@ impl Builder {
     fn set_label_position(&mut self, label: Label, position: usize) {
         self.current_subprog.borrow_mut().set_label_position(label, position);
     }
-
-    // symbols
-    fn add_var(&mut self, name: &Token) -> Result<isize, Exception> {
-        let context = self.context.borrow_mut();
-        let mut symtable = context.local_symbols.borrow_mut();
-        symtable.add_var(name)
-    }
-
-    fn add_func(&mut self, name: &Token, func_id: usize) -> Result<(), Exception> {
-        let context = self.context.borrow_mut();
-        let mut symtable = context.local_symbols.borrow_mut();
-        symtable.add_func(name, func_id)
-    }
-
-    fn add_args(&mut self, args: &Vec<Token>) -> Result<(), Exception> {
-        let context = self.context.borrow_mut();
-        let mut symtable = context.local_symbols.borrow_mut();
-
-        let offset_start = -(args.len() as isize + 3);
-
-        let mut i = 0;
-        for arg in args {
-            symtable.add_var_offset(arg, i + offset_start)?;
-            i += 1;
-        }
-
-        Ok(())
-    }
-
-    fn get_symbol(&self, name: &Token) -> Result<(SymbolType, ResolveType), Exception> {
-
-        let mut rf = self.context.clone();
-        let mut level = 0;
-
-        loop {
-            rf = {
-                let context = rf.borrow();
-                let symtable = context.local_symbols.borrow();
-
-                if let Some(symbol) = symtable.get(name) {
-                    let is_local = level == 0;
-                    let is_var = symbol.is_var();
-                    let ctx_type = context.ctx_type;
-
-                    let resolve =
-                        if !is_var || ctx_type == GlobalCtx {
-                            ResolveType::Global
-                        } else if is_local {
-                            ResolveType::Local
-                        } else {
-                            ResolveType::Closure(level)
-                        };
-
-                    return Ok((symbol, resolve));
-                }
-
-                if let Some(parent) = &context.parent {
-                    parent.clone()
-                } else {
-                    return Err(SymbolTable::declare_err(name));
-                }
-            };
-
-            level += 1;
-        }
-    }
-
-    fn count_symbols(&self) -> usize {
-        let context = self.context.borrow();
-        let symtable = context.local_symbols.borrow();
-
-        symtable.len()
-    }
-
-    fn enter_scope(&mut self) -> SymbolTableRef {
-        let mut context = self.context.borrow_mut();
-        let current_symtable = context.local_symbols.clone();
-
-        context.local_symbols = SymbolTable::create_child(&current_symtable);
-
-        current_symtable
-    }
-
-    fn restore_scope(&mut self, symtable: SymbolTableRef) {
-        let mut context = self.context.borrow_mut();
-        context.local_symbols = symtable;
-    }
 }
 
 impl StmtVisitor<StmtResult> for Builder {
-    fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> StmtResult {
-        if let (SymbolType::Var(offset), resolve) = self.get_symbol(name)? {
+    fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>, resolve: &ResolverData) -> StmtResult {
+        if let SymbolType::Var(offset)= resolve.symbol_type.get() {
             self.generate_expr(expr)?;
 
             // TODO: handle closure
-            let bytecode = match resolve {
+            let bytecode = match resolve.resolve_type.get() {
                 ResolveType::Global     => Bytecode::STORE_GLOBAL(offset),
                 ResolveType::Local      => Bytecode::STORE(offset),
                 ResolveType::Closure(_) => unimplemented!(),
@@ -255,9 +154,7 @@ impl StmtVisitor<StmtResult> for Builder {
         error(name.line, "Can't assign value to function")
     }
 
-    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>) -> StmtResult {
-        let current_symtable = self.enter_scope();
-
+    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>, num_vars: &PCell<usize>) -> StmtResult {
         let mut block_returned = false;
         for statement in body {
             block_returned = self.generate(statement)?;
@@ -268,20 +165,20 @@ impl StmtVisitor<StmtResult> for Builder {
         }
 
         // pop local scope variables
-        let count = self.count_symbols();
+        let count = num_vars.get();
         let line = self.last_line;
         self.emit(line, Bytecode::POP(count));
 
-        // TODO: handle restore on exception
+        // TODO: handle has_captured
 
-        self.restore_scope(current_symtable);
+        // TODO: handle restore on exception
 
         Ok(block_returned)
     }
 
     fn visit_break(&mut self) -> StmtResult {
         let line = self.last_line;
-        let label = self.context.borrow().while_end_label;
+        let label = self.loop_end_label;
 
         if label < 0 {
             return error(line, "Invalid break outside of loop")
@@ -299,23 +196,14 @@ impl StmtVisitor<StmtResult> for Builder {
         Ok(false)
     }
 
-    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>) -> StmtResult {
+    fn visit_funcdecl(&mut self, _name: &Token, _args: &Vec<Token>, body: &Vec<Box<Stmt>>, id: &PCell<usize>, has_captured: &PCell<bool>) -> StmtResult {
         let subprog = self.current_subprog.clone();
 
         // start function block
-        let (func_block, func_id) = self.create_function_block(args.len());
+        let func_block = self.get_function_block(id.get());
         self.current_subprog = func_block;
 
-        // add function to current scope's symbol table
-        self.add_func(name, func_id)?;
-
-        // start new context
-        let current_context = self.context.clone();
-        let new_context = Context::create_child(&self.context, FuncCtx);
-        self.context = new_context;
-
         // push new symbol table and put args inside it
-        self.add_args(args)?;
 
         let mut block_returned = false;
 
@@ -329,6 +217,7 @@ impl StmtVisitor<StmtResult> for Builder {
 
         if !block_returned {
             // add empty return if not yet exist
+            // TODO: handle has_captured
 
             let line = self.last_line;
             self.emit(line, Bytecode::NIL);
@@ -339,9 +228,8 @@ impl StmtVisitor<StmtResult> for Builder {
 
         // TODO: handle restore on exception
 
-        // end function block & context
+        // end function block
         self.current_subprog = subprog;
-        self.context = current_context;
 
         Ok(false)
     }
@@ -397,12 +285,6 @@ impl StmtVisitor<StmtResult> for Builder {
     fn visit_return(&mut self, expr: &Option<Box<Expr>>) -> StmtResult {
         let line = self.last_line;
 
-        let ctx_type = self.context.borrow().ctx_type;
-
-        if ctx_type != FuncCtx {
-            return error(line, "Invalid return outside of loop");
-        }
-
         if let Some(expr) = expr {
             self.generate_expr(expr)?;
         } else {
@@ -429,7 +311,7 @@ impl StmtVisitor<StmtResult> for Builder {
     }
 
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, is_captured: &PCell<bool>) -> StmtResult {
-        self.add_var(name)?;
+        // TODO: handle is_captured
         self.generate_expr(expr)?;
 
         Ok(false)
@@ -447,18 +329,14 @@ impl StmtVisitor<StmtResult> for Builder {
         self.branch_placeholder(line, BranchType::BRF, while_end);
 
         // save previous while label
-        let last_label = {
-            let mut ctx = self.context.borrow_mut();
-            let last_label = ctx.while_end_label;
-            ctx.while_end_label = while_end;
-            last_label
-        };
+        let last_label = self.loop_end_label;
+        self.loop_end_label = while_end;
 
         // generate body
         let while_returned = self.generate(body)?;
 
         // restore previous while label
-        self.context.borrow_mut().while_end_label = last_label;
+        self.loop_end_label = last_label;
 
         self.emit(line, Bytecode::BR(while_start_pos)); // br to top
 
@@ -605,17 +483,18 @@ impl ExprVisitor<ExprResult> for Builder {
     }
 
     fn visit_variable(&mut self, name: &Token, resolve: &ResolverData) -> ExprResult {
-        use self::ResolveType::*;
-
         // TODO: handle closure
-        let bytecode = match self.get_symbol(name)? {
-            (SymbolType::Var(offset), resolve) =>
-                match resolve {
-                    Global      => Bytecode::LOAD_GLOBAL(offset),
-                    Local       => Bytecode::LOAD(offset),
-                    Closure(_)  => unimplemented!(),
+        let resolve_type = resolve.resolve_type.get();
+        let symbol_type = resolve.symbol_type.get();
+
+        let bytecode = match symbol_type {
+            SymbolType::Var(offset) =>
+                match resolve_type {
+                    ResolveType::Global      => Bytecode::LOAD_GLOBAL(offset),
+                    ResolveType::Local       => Bytecode::LOAD(offset),
+                    ResolveType::Closure(_)  => unimplemented!(),
                 },
-            (SymbolType::Func(id), _)          => Bytecode::LOAD_FUNC(id),
+            SymbolType::Func(id)    => Bytecode::LOAD_FUNC(id),
         };
 
         self.emit(name.line, bytecode);

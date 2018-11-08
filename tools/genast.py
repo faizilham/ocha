@@ -18,13 +18,13 @@ AST = {
     ),
 
     "Stmt":(
-        [ "ast::expr::Expr", "token::Token", "helper::PCell" ],
+        [ "ast::expr::Expr", "token::Token", "helper::PCell", "resolver::ResolverData" ],
         [
-            "Assignment -> name: Token, expr: Box<Expr>",
-            "Block      -> body: Vec<Box<Stmt>>, has_captured: PCell<bool>",
+            "Assignment -> name: Token, expr: Box<Expr>, resolve: ResolverData",
+            "Block      -> body: Vec<Box<Stmt>>, has_captured: PCell<bool>, num_vars: PCell<usize>",
             "Break      -> ",
             "Expression -> expr: Box<Expr>",
-            "FuncDecl   -> name: Token, args: Vec<Token>, body: Vec<Box<Stmt>>, has_captured: PCell<bool>",
+            "FuncDecl   -> name: Token, args: Vec<Token>, body: Vec<Box<Stmt>>, id: PCell<usize>, has_captured: PCell<bool>",
             "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>",
             "Return     -> expr: Option<Box<Expr>>",

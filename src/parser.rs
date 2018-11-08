@@ -2,7 +2,7 @@ use ast::expr::{Expr, ExprNode};
 use ast::stmt::{Stmt, StmtNode};
 use exception::Exception;
 use exception::Exception::ParseErr;
-use helper::{PCell, new_pcell};
+use helper::new_pcell;
 use token::{TokenType, Token};
 use token::TokenType::*;
 use program_data::Literal;
@@ -128,9 +128,10 @@ fn func_declaration(parser: &mut ParserState) -> StmtResult {
     parser.expect(LEFT_BRACE, "Expect '{' after function signature")?;
 
     let body = read_block(parser)?;
+    let id = new_pcell(0);
     let has_captured = new_pcell(false);
 
-    Ok(create_stmt(line, StmtNode::FuncDecl { name, args, body, has_captured }))
+    Ok(create_stmt(line, StmtNode::FuncDecl { name, args, body, id, has_captured }))
 }
 
 fn statement(parser: &mut ParserState) -> StmtResult {
@@ -167,8 +168,9 @@ fn block(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
     let body = read_block(parser)?;
     let has_captured = new_pcell(false);
+    let num_vars = new_pcell(0);
 
-    Ok(create_stmt(line, StmtNode::Block { body, has_captured }))
+    Ok(create_stmt(line, StmtNode::Block { body, has_captured, num_vars }))
 }
 
 fn break_statement(parser: &mut ParserState) -> StmtResult {
@@ -212,7 +214,7 @@ fn assignment(parser: &mut ParserState, variable: Box<Expr>) -> StmtResult {
 
     match variable.node {
         ExprNode::Variable{ name, .. } =>
-            Ok(create_stmt(line, StmtNode::Assignment{name, expr})),
+            Ok(create_stmt(line, StmtNode::Assignment{name, expr, resolve: ResolverData::new()})),
         ExprNode::Get {..} => Ok(create_stmt(line, StmtNode::Set{get_expr: variable, expr})),
         _ => Err(parser.exception("Invalid assignment target"))
     }

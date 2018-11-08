@@ -35,6 +35,26 @@ impl ResolverData {
     }
 }
 
+
+pub fn resolve(statements: &Vec<Box<Stmt>>) -> Result<Vec<FunctionSignature>, Vec<Exception>> {
+    let mut resolver = Resolver::new();
+    let mut errors = Vec::new();
+
+    for statement in statements {
+        if let Err(e) = resolver.resolve(&statement) {
+            errors.push(e);
+        }
+    }
+
+    if errors.len() > 0 {
+        return Err(errors);
+    }
+
+    let Resolver { functions, .. } = resolver;
+
+    Ok(functions)
+}
+
 struct Resolver {
     symbol_table: SymbolTableRef,
     functions: Vec<FunctionSignature>,
@@ -47,9 +67,11 @@ type ExprResult = Result<(bool), Exception>; // has_closure
 
 impl Resolver {
     pub fn new() -> Resolver {
+        let functions = vec![ FunctionSignature::new(0) ]; // first function = global code
+
         Resolver {
             symbol_table: SymbolTable::new_ref(GlobalCtx, 0, 0, None),
-            functions: Vec::new(),
+            functions,
             last_line: 0,
         }
     }
@@ -145,10 +167,14 @@ impl Resolver {
 }
 
 impl StmtVisitor<StmtResult> for Resolver {
-    fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>) -> StmtResult {
-        let line = self.last_line;
-        if let (SymbolType::Var(offset), resolve) = self.get_symbol(name)? {
+    fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>, resolve: &ResolverData) -> StmtResult {
+        let (symbol_type, resolve_type) = self.get_symbol(name)?;
+
+        if let SymbolType::Var(offset) = symbol_type {
             self.resolve_expr(expr)?;
+
+            resolve.symbol_type.set(symbol_type);
+            resolve.resolve_type.set(resolve_type);
 
             // TODO: change is_captured if resolve type is closure
 
@@ -158,7 +184,7 @@ impl StmtVisitor<StmtResult> for Resolver {
         error(name.line, "Can't assign value to function")
     }
 
-    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>) -> StmtResult {
+    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>, num_vars: &PCell<usize>) -> StmtResult {
         // create new symbol table
         let current_symtable = self.symbol_table.clone();
         let new_symtable = SymbolTable::create_local_scope(&self.symbol_table);
@@ -175,6 +201,9 @@ impl StmtVisitor<StmtResult> for Resolver {
         }
 
         // end function
+        let count = self.symbol_table.borrow().len();
+        num_vars.set(count);
+
         self.symbol_table = current_symtable;
         // TODO: update has_captured
 
@@ -190,10 +219,12 @@ impl StmtVisitor<StmtResult> for Resolver {
         Ok(false)
     }
 
-    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>) -> StmtResult {
+    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>, id: &PCell<usize>, has_captured: &PCell<bool>) -> StmtResult {
 
         // create new function and put to current symbol table
-        self.add_func(name, args.len())?;
+        let func_id = self.add_func(name, args.len())?;
+
+        id.set(func_id);
 
         // create new symbol table
         let current_symtable = self.symbol_table.clone();
@@ -243,13 +274,7 @@ impl StmtVisitor<StmtResult> for Resolver {
     }
 
     fn visit_return(&mut self, expr: &Option<Box<Expr>>) -> StmtResult {
-        let line = self.last_line;
-        let ctx_type = self.symbol_table.borrow().context_type;
-
-        if ctx_type != FuncCtx {
-            return error(line, "Invalid return outside of function");
-        }
-
+        // TODO: handle func context has_captured
         if let Some(expr) = expr {
             self.resolve_expr(expr)?;
         }
