@@ -369,29 +369,29 @@ impl StmtVisitor<StmtResult> for Resolver {
 
 impl ExprVisitor<ExprResult> for Resolver {
     fn visit_binary(&mut self, left: &Box<Expr>, _: &Token, right: &Box<Expr>) -> ExprResult {
-        let left_has_closure = self.resolve_expr(left)?;
-        let right_has_closure = self.resolve_expr(right)?;
+        let left_is_capturing = self.resolve_expr(left)?;
+        let right_is_capturing = self.resolve_expr(right)?;
 
-        Ok(left_has_closure && right_has_closure)
+        Ok(left_is_capturing && right_is_capturing)
     }
 
     fn visit_funccall(&mut self, callee: &Box<Expr>, args: &Vec<Box<Expr>>) -> ExprResult {
-        let mut has_closure = false;
+        let mut is_capturing = false;
         for arg in args {
-            has_closure = self.resolve_expr(arg)? || has_closure;
+            is_capturing = self.resolve_expr(arg)? || is_capturing;
         }
-        has_closure = self.resolve_expr(callee)? || has_closure;
+        is_capturing = self.resolve_expr(callee)? || is_capturing;
 
-        Ok(has_closure)
+        Ok(is_capturing)
     }
 
     fn visit_get(&mut self, callee: &Box<Expr>, _: &Token, member: &Box<Expr>) -> ExprResult {
-        let mut has_closure;
+        let mut is_capturing;
 
-        has_closure = self.resolve_expr(callee)?;
-        has_closure = self.resolve_expr(member)? || has_closure;
+        is_capturing = self.resolve_expr(callee)?;
+        is_capturing = self.resolve_expr(member)? || is_capturing;
 
-        Ok(has_closure)
+        Ok(is_capturing)
     }
 
     fn visit_grouping(&mut self, expr: &Box<Expr>) -> ExprResult {
@@ -403,13 +403,13 @@ impl ExprVisitor<ExprResult> for Resolver {
     }
 
     fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> ExprResult {
-        let mut has_closure = false;
+        let mut is_capturing = false;
 
         for expr in exprs {
-            has_closure = self.resolve_expr(expr)? || has_closure;
+            is_capturing = self.resolve_expr(expr)? || is_capturing;
         }
 
-        Ok(has_closure)
+        Ok(is_capturing)
     }
 
     fn visit_unary(&mut self, _: &Token, expr: &Box<Expr>) -> ExprResult {
@@ -417,13 +417,13 @@ impl ExprVisitor<ExprResult> for Resolver {
     }
 
     fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> ExprResult {
-        let mut has_closure;
+        let mut is_capturing;
 
-        has_closure = self.resolve_expr(condition)?;
-        has_closure = self.resolve_expr(true_branch)? || has_closure;
-        has_closure = self.resolve_expr(false_branch)? || has_closure;
+        is_capturing = self.resolve_expr(condition)?;
+        is_capturing = self.resolve_expr(true_branch)? || is_capturing;
+        is_capturing = self.resolve_expr(false_branch)? || is_capturing;
 
-        Ok(has_closure)
+        Ok(is_capturing)
     }
 
     fn visit_variable(&mut self, name: &Token, id: &Cell<usize>) -> ExprResult {
@@ -432,13 +432,13 @@ impl ExprVisitor<ExprResult> for Resolver {
         let var_id = self.add_resolve(resolve_type, symbol_type);
         id.set(var_id);
 
-        let mut has_closure = false;
+        let mut is_capturing = false;
         if let Closure(_) = resolve_type {
             // TODO: change is_captured if resolve type is closure
-            has_closure = true;
+            is_capturing = true;
         }
 
-        Ok(has_closure)
+        Ok(is_capturing)
     }
 }
 
