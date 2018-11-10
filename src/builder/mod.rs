@@ -202,6 +202,10 @@ impl StmtVisitor<StmtResult> for Builder {
             capture_args_codes = scope_data.captured_args
             .iter()
             .map(|(offset, captured_offset)| {
+                if *captured_offset < 0 {
+                    panic!("Negative capture offset for closure");
+                }
+
                 Bytecode::CAPTURE(*offset, *captured_offset as usize)
             })
             .collect();
@@ -289,6 +293,10 @@ impl StmtVisitor<StmtResult> for Builder {
             capture_args_codes = scope_data.captured_args
             .iter()
             .map(|(offset, captured_offset)| {
+                if *captured_offset < 0 {
+                    panic!("Negative capture offset for closure");
+                }
+
                 Bytecode::CAPTURE(*offset, *captured_offset as usize)
             })
             .collect();
@@ -431,6 +439,10 @@ impl StmtVisitor<StmtResult> for Builder {
         let var_data = *self.variables.get(id.get()).expect("Invalid variable id in builder");
 
         if var_data.is_captured {
+            if var_data.captured_offset < 0 {
+                panic!("Negative capture offset for closure");
+            }
+
             self.emit(name.line, Bytecode::CAPTURE(var_data.offset, var_data.captured_offset as usize));
         }
 
