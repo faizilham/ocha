@@ -1,6 +1,6 @@
+use std::cell::Cell;
 use token::Token;
 use program_data::Literal;
-use resolver::ResolverData;
 
 #[derive(Debug)]
 pub struct Expr {
@@ -17,7 +17,7 @@ pub enum ExprNode {
     ListInit { exprs: Vec<Box<Expr>> },
     Unary { operator: Token, expr: Box<Expr> },
     Ternary { condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr> },
-    Variable { name: Token, resolve: ResolverData },
+    Variable { name: Token, id: Cell<usize> },
 }
 
 pub trait ExprVisitor<T> {
@@ -29,7 +29,7 @@ pub trait ExprVisitor<T> {
     fn visit_listinit(&mut self, exprs: &Vec<Box<Expr>>) -> T;
     fn visit_unary(&mut self, operator: &Token, expr: &Box<Expr>) -> T;
     fn visit_ternary(&mut self, condition: &Box<Expr>, true_branch: &Box<Expr>, false_branch: &Box<Expr>) -> T;
-    fn visit_variable(&mut self, name: &Token, resolve: &ResolverData) -> T;
+    fn visit_variable(&mut self, name: &Token, id: &Cell<usize>) -> T;
 }
 
 impl Expr {
@@ -46,7 +46,7 @@ impl Expr {
             ExprNode::ListInit{exprs} => visitor.visit_listinit(exprs),
             ExprNode::Unary{operator, expr} => visitor.visit_unary(operator, expr),
             ExprNode::Ternary{condition, true_branch, false_branch} => visitor.visit_ternary(condition, true_branch, false_branch),
-            ExprNode::Variable{name, resolve} => visitor.visit_variable(name, resolve),
+            ExprNode::Variable{name, id} => visitor.visit_variable(name, id),
         }
     }
 }

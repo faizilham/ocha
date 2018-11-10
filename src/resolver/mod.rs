@@ -1,7 +1,7 @@
+use std::cell::Cell;
 
-use ast::expr::{Expr, ExprNode, ExprVisitor};
+use ast::expr::{Expr, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
-use helper::{PCell, new_pcell};
 use program_data::{Literal, FunctionSignature};
 use token::Token;
 use exception::Exception;
@@ -19,24 +19,50 @@ pub enum ResolveType {
     Closure(usize)
 }
 
-#[derive(Debug)]
-pub struct ResolverData {
-    pub resolve_type: PCell<ResolveType>,
-    pub symbol_type: PCell<SymbolType>,
-}
-
-use self::SymbolType::*;
 use self::ResolveType::*;
 use self::ContextType::*;
 
+#[derive(Debug)]
+pub struct ResolverData {
+    pub resolve_type: ResolveType,
+    pub symbol_type: SymbolType,
+}
+
 impl ResolverData {
-    pub fn new() -> ResolverData {
-        ResolverData {resolve_type: new_pcell(Global), symbol_type: new_pcell(Var(0))}
+    pub fn new(resolve_type: ResolveType, symbol_type: SymbolType) -> ResolverData {
+        ResolverData { resolve_type, symbol_type }
     }
 }
 
+pub struct ScopeData {
+    pub has_captured: bool,
+    pub num_vardecl: usize
+}
 
-pub fn resolve(statements: &Vec<Box<Stmt>>) -> Result<Vec<FunctionSignature>, Vec<Exception>> {
+impl ScopeData {
+    pub fn new() -> Self {
+        Self { has_captured: false, num_vardecl: 0}
+    }
+}
+
+pub struct VariableData {
+    pub is_captured: bool
+}
+
+impl VariableData {
+    pub fn new() -> Self {
+        Self { is_captured: false }
+    }
+}
+
+pub struct ResolverInfo {
+    pub functions: Vec<FunctionSignature>,
+    pub scopes: Vec<ScopeData>,
+    pub variables: Vec<VariableData>,
+    pub resolves: Vec<ResolverData>
+}
+
+pub fn resolve(statements: &Vec<Box<Stmt>>) -> Result<ResolverInfo, Vec<Exception>> {
     let mut resolver = Resolver::new();
     let mut errors = Vec::new();
 
@@ -50,14 +76,16 @@ pub fn resolve(statements: &Vec<Box<Stmt>>) -> Result<Vec<FunctionSignature>, Ve
         return Err(errors);
     }
 
-    let Resolver { functions, .. } = resolver;
-
-    Ok(functions)
+    Ok(resolver.to_resolver_info())
 }
 
 struct Resolver {
     symbol_table: SymbolTableRef,
     functions: Vec<FunctionSignature>,
+    scopes: Vec<ScopeData>,
+    variables: Vec<VariableData>,
+    resolves: Vec<ResolverData>,
+
     last_line: i32,
 }
 
@@ -72,8 +100,17 @@ impl Resolver {
         Resolver {
             symbol_table: SymbolTable::new_ref(GlobalCtx, 0, 0, None),
             functions,
+            scopes: Vec::new(),
+            variables: Vec::new(),
+            resolves: Vec::new(),
             last_line: 0,
         }
+    }
+
+    pub fn to_resolver_info (self) -> ResolverInfo {
+        let Self { functions, scopes, variables, resolves, ..} = self;
+
+        ResolverInfo { functions, scopes, variables, resolves }
     }
 
     // visit function
@@ -88,9 +125,14 @@ impl Resolver {
     }
 
     // symbols
-    fn add_var(&self, name: &Token) -> Result<isize, Exception> {
+    fn add_var(&mut self, name: &Token) -> Result<usize, Exception> {
+        let var_id = self.variables.len();
+        self.variables.push(VariableData::new());
+
         let mut symtable = self.symbol_table.borrow_mut();
-        symtable.add_var(name)
+        symtable.add_var(name)?;
+
+        Ok(var_id)
     }
 
     fn add_func(&mut self, name: &Token, num_args: usize) -> Result<usize, Exception> {
@@ -101,6 +143,20 @@ impl Resolver {
         symtable.add_func(name, func_id)?;
 
         Ok(func_id)
+    }
+
+    fn add_resolve(&mut self, resolve_type: ResolveType, symbol_type: SymbolType) -> usize {
+        let id = self.resolves.len();
+        self.resolves.push(ResolverData::new(resolve_type, symbol_type));
+
+        id
+    }
+
+    fn add_scope(&mut self) -> usize {
+        let id = self.scopes.len();
+        self.scopes.push(ScopeData::new());
+
+        id
     }
 
     fn add_args(&mut self, args: &Vec<Token>) -> Result<(), Exception> {
@@ -167,14 +223,14 @@ impl Resolver {
 }
 
 impl StmtVisitor<StmtResult> for Resolver {
-    fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>, resolve: &ResolverData) -> StmtResult {
+    fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
         let (symbol_type, resolve_type) = self.get_symbol(name)?;
 
-        if let SymbolType::Var(offset) = symbol_type {
+        if let SymbolType::Var(_) = symbol_type {
             self.resolve_expr(expr)?;
 
-            resolve.symbol_type.set(symbol_type);
-            resolve.resolve_type.set(resolve_type);
+            let var_id = self.add_resolve(resolve_type, symbol_type);
+            id.set(var_id);
 
             // TODO: change is_captured if resolve type is closure
 
@@ -184,7 +240,11 @@ impl StmtVisitor<StmtResult> for Resolver {
         error(name.line, "Can't assign value to function")
     }
 
-    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>, num_vars: &PCell<usize>) -> StmtResult {
+    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, id: &Cell<usize>) -> StmtResult {
+
+        let scope_id = self.add_scope();
+        id.set(scope_id);
+
         // create new symbol table
         let current_symtable = self.symbol_table.clone();
         let new_symtable = SymbolTable::create_local_scope(&self.symbol_table);
@@ -202,7 +262,11 @@ impl StmtVisitor<StmtResult> for Resolver {
 
         // end function
         let count = self.symbol_table.borrow().len();
-        num_vars.set(count);
+
+        if count > 0 {
+            let scope = self.scopes.get_mut(scope_id).unwrap();
+            scope.num_vardecl = count;
+        }
 
         self.symbol_table = current_symtable;
         // TODO: update has_captured
@@ -219,11 +283,10 @@ impl StmtVisitor<StmtResult> for Resolver {
         Ok(false)
     }
 
-    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>, id: &PCell<usize>, has_captured: &PCell<bool>) -> StmtResult {
+    fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>, id: &Cell<usize>) -> StmtResult {
 
         // create new function and put to current symbol table
         let func_id = self.add_func(name, args.len())?;
-
         id.set(func_id);
 
         // create new symbol table
@@ -289,8 +352,10 @@ impl StmtVisitor<StmtResult> for Resolver {
         Ok(false)
     }
 
-    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, _is_captured: &PCell<bool>) -> StmtResult {
-        self.add_var(name)?;
+    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
+        let var_id = self.add_var(name)?;
+        id.set(var_id);
+
         self.resolve_expr(expr)?;
 
         Ok(false)
@@ -361,11 +426,11 @@ impl ExprVisitor<ExprResult> for Resolver {
         Ok(has_closure)
     }
 
-    fn visit_variable(&mut self, name: &Token, resolve: &ResolverData) -> ExprResult {
+    fn visit_variable(&mut self, name: &Token, id: &Cell<usize>) -> ExprResult {
         let (symbol_type, resolve_type) = self.get_symbol(name)?;
 
-        resolve.symbol_type.set(symbol_type);
-        resolve.resolve_type.set(resolve_type);
+        let var_id = self.add_resolve(resolve_type, symbol_type);
+        id.set(var_id);
 
         let mut has_closure = false;
         if let Closure(_) = resolve_type {

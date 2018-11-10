@@ -1,19 +1,20 @@
+use std::cell::Cell;
+
 use ast::expr::{Expr, ExprNode, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
 use exception::Exception;
-use helper::PCell;
 use token::Token;
 use token::TokenType::*;
 use program_data::{Literal, FunctionSignature, LineData};
-use resolver::{ResolverData, ResolveType, SymbolType};
+use resolver::{ResolverInfo, ResolverData, ResolveType, SymbolType, ScopeData, VariableData};
 use vm::{Bytecode, Module};
 
 mod block;
 
 use self::block::{BranchType, Block, BlockRef, Label};
 
-pub fn build(statements: Vec<Box<Stmt>>, function_signatures: Vec<FunctionSignature>) -> Result<Module, Vec<Exception>> {
-    let mut builder = Builder::new(function_signatures);
+pub fn build(statements: Vec<Box<Stmt>>, resolver_info: ResolverInfo) -> Result<Module, Vec<Exception>> {
+    let mut builder = Builder::new(resolver_info);
 
     let mut errors = Vec::new();
 
@@ -65,7 +66,11 @@ struct Builder {
     blocks: Vec<BlockRef>,
     current_subprog: BlockRef,
     literals: Vec<Literal>,
+
     functions: Vec<FunctionSignature>,
+    scopes: Vec<ScopeData>,
+    variables: Vec<VariableData>,
+    resolves: Vec<ResolverData>,
 
     last_line: i32,
     loop_end_label: Label,
@@ -75,7 +80,8 @@ type StmtResult = Result<bool, Exception>; // result: is statement returned
 type ExprResult = Result<(), Exception>;
 
 impl Builder {
-    fn new (functions : Vec<FunctionSignature>) -> Builder {
+    fn new (resolver_info: ResolverInfo) -> Builder {
+        let ResolverInfo {functions, scopes, variables, resolves } = resolver_info;
         let mut blocks = Vec::with_capacity(functions.len());
 
         for _ in &functions {
@@ -88,7 +94,12 @@ impl Builder {
             blocks,
             current_subprog,
             literals: Vec::new(),
+
             functions,
+            scopes,
+            variables,
+            resolves,
+
             last_line: 0,
             loop_end_label: -1,
         }
@@ -136,12 +147,14 @@ impl Builder {
 }
 
 impl StmtVisitor<StmtResult> for Builder {
-    fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>, resolve: &ResolverData) -> StmtResult {
-        if let SymbolType::Var(offset)= resolve.symbol_type.get() {
+    fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
+        let ResolverData{symbol_type, resolve_type} = *self.resolves.get(id.get()).unwrap();
+
+        if let SymbolType::Var(offset) = symbol_type {
             self.generate_expr(expr)?;
 
             // TODO: handle closure
-            let bytecode = match resolve.resolve_type.get() {
+            let bytecode = match resolve_type {
                 ResolveType::Global     => Bytecode::STORE_GLOBAL(offset),
                 ResolveType::Local      => Bytecode::STORE(offset),
                 ResolveType::Closure(_) => unimplemented!(),
@@ -154,7 +167,7 @@ impl StmtVisitor<StmtResult> for Builder {
         error(name.line, "Can't assign value to function")
     }
 
-    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, has_captured: &PCell<bool>, num_vars: &PCell<usize>) -> StmtResult {
+    fn visit_block(&mut self, body: &Vec<Box<Stmt>>, id: &Cell<usize>) -> StmtResult {
         let mut block_returned = false;
         for statement in body {
             block_returned = self.generate(statement)?;
@@ -165,7 +178,13 @@ impl StmtVisitor<StmtResult> for Builder {
         }
 
         // pop local scope variables
-        let count = num_vars.get();
+        let count;
+        {
+            let scope = self.scopes.get(id.get()).unwrap();
+            count = scope.num_vardecl;
+        }
+
+
         let line = self.last_line;
         self.emit(line, Bytecode::POP(count));
 
@@ -196,7 +215,7 @@ impl StmtVisitor<StmtResult> for Builder {
         Ok(false)
     }
 
-    fn visit_funcdecl(&mut self, _name: &Token, _args: &Vec<Token>, body: &Vec<Box<Stmt>>, id: &PCell<usize>, has_captured: &PCell<bool>) -> StmtResult {
+    fn visit_funcdecl(&mut self, _name: &Token, _args: &Vec<Token>, body: &Vec<Box<Stmt>>, id: &Cell<usize>) -> StmtResult {
         let subprog = self.current_subprog.clone();
 
         // start function block
@@ -310,7 +329,7 @@ impl StmtVisitor<StmtResult> for Builder {
         }
     }
 
-    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, is_captured: &PCell<bool>) -> StmtResult {
+    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
         // TODO: handle is_captured
         self.generate_expr(expr)?;
 
@@ -482,10 +501,11 @@ impl ExprVisitor<ExprResult> for Builder {
         Ok(())
     }
 
-    fn visit_variable(&mut self, name: &Token, resolve: &ResolverData) -> ExprResult {
+    fn visit_variable(&mut self, name: &Token, id: &Cell<usize>) -> ExprResult {
+
+        let ResolverData{symbol_type, resolve_type} = *self.resolves.get(id.get()).unwrap();
+
         // TODO: handle closure
-        let resolve_type = resolve.resolve_type.get();
-        let symbol_type = resolve.symbol_type.get();
 
         let bytecode = match symbol_type {
             SymbolType::Var(offset) =>

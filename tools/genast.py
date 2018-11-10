@@ -3,7 +3,7 @@ output_dir = "src/ast"
 
 AST = {
     "Expr": (
-        [ "token::Token", "program_data::Literal", "resolver::ResolverData"],
+        [ "std::cell::Cell", "token::Token", "program_data::Literal"],
         [
             "Binary     -> left: Box<Expr>, operator: Token, right: Box<Expr>",
             "FuncCall   -> callee: Box<Expr>, args: Vec<Box<Expr>>",
@@ -13,23 +13,23 @@ AST = {
             "ListInit   -> exprs: Vec<Box<Expr>>",
             "Unary      -> operator: Token, expr: Box<Expr>",
             "Ternary    -> condition: Box<Expr>, true_branch: Box<Expr>, false_branch: Box<Expr>",
-            "Variable   -> name: Token, resolve: ResolverData"
+            "Variable   -> name: Token, id: Cell<usize>"
         ]
     ),
 
     "Stmt":(
-        [ "ast::expr::Expr", "token::Token", "helper::PCell", "resolver::ResolverData" ],
+        [ "std::cell::Cell", "ast::expr::Expr", "token::Token" ],
         [
-            "Assignment -> name: Token, expr: Box<Expr>, resolve: ResolverData",
-            "Block      -> body: Vec<Box<Stmt>>, has_captured: PCell<bool>, num_vars: PCell<usize>",
+            "Assignment -> name: Token, expr: Box<Expr>, id: Cell<usize>",
+            "Block      -> body: Vec<Box<Stmt>>, id: Cell<usize>",
             "Break      -> ",
             "Expression -> expr: Box<Expr>",
-            "FuncDecl   -> name: Token, args: Vec<Token>, body: Vec<Box<Stmt>>, id: PCell<usize>, has_captured: PCell<bool>",
+            "FuncDecl   -> name: Token, args: Vec<Token>, body: Vec<Box<Stmt>>, id: Cell<usize>",
             "If         -> condition: Box<Expr>, true_branch: Box<Stmt>, false_branch: Option<Box<Stmt>>",
             "Print      -> exprs: Vec<Box<Expr>>",
             "Return     -> expr: Option<Box<Expr>>",
             "Set        -> get_expr: Box<Expr>, expr: Box<Expr>",
-            "VarDecl    -> name: Token, expr: Box<Expr>, is_captured: PCell<bool>",
+            "VarDecl    -> name: Token, expr: Box<Expr>, id: Cell<usize>",
             "While      -> condition: Box<Expr>, body: Box<Stmt>",
         ]
     )

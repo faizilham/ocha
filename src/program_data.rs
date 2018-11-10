@@ -10,12 +10,19 @@ pub enum Literal {
 #[derive(Debug, Clone, Copy)]
 pub struct FunctionSignature {
     pub entry_point: usize,
-    pub num_args: usize
+    pub num_args: usize,
+    pub has_captured: bool,
+    pub is_capturing: bool
 }
 
 impl FunctionSignature {
     pub fn new(num_args: usize) -> FunctionSignature {
-        FunctionSignature { entry_point: 0, num_args }
+        FunctionSignature {
+            entry_point: 0,
+            num_args,
+            has_captured: false,
+            is_capturing: false
+        }
     }
 }
 

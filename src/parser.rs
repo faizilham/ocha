@@ -1,12 +1,12 @@
+use std::cell::Cell;
+
 use ast::expr::{Expr, ExprNode};
 use ast::stmt::{Stmt, StmtNode};
 use exception::Exception;
 use exception::Exception::ParseErr;
-use helper::new_pcell;
 use token::{TokenType, Token};
 use token::TokenType::*;
 use program_data::Literal;
-use resolver::{ResolverData};
 
 // use EOF as padding
 static BINARY_PRECEDENCE: [[TokenType; 4]; 4] = [
@@ -99,7 +99,7 @@ fn var_declaration(parser: &mut ParserState) -> StmtResult {
 
     parser.expect(SEMICOLON, "Expect ';' after variable declaration")?;
 
-    Ok(create_stmt(line, StmtNode::VarDecl { name, expr, is_captured: new_pcell(false) }))
+    Ok(create_stmt(line, StmtNode::VarDecl { name, expr, id: Cell::new(0) }))
 }
 
 fn func_declaration(parser: &mut ParserState) -> StmtResult {
@@ -132,9 +132,7 @@ fn func_declaration(parser: &mut ParserState) -> StmtResult {
 
     // read body
     let result = read_block(parser).map(|body| {
-        let id = new_pcell(0);
-        let has_captured = new_pcell(false);
-        create_stmt(line, StmtNode::FuncDecl { name, args, body, id, has_captured })
+        create_stmt(line, StmtNode::FuncDecl { name, args, body, id: Cell::new(0) })
     });
 
     parser.func_level -= 1;
@@ -176,10 +174,8 @@ fn read_block(parser: &mut ParserState) -> Result<Vec<Box<Stmt>>, Exception> {
 fn block(parser: &mut ParserState) -> StmtResult {
     let line = parser.last_line;
     let body = read_block(parser)?;
-    let has_captured = new_pcell(false);
-    let num_vars = new_pcell(0);
 
-    Ok(create_stmt(line, StmtNode::Block { body, has_captured, num_vars }))
+    Ok(create_stmt(line, StmtNode::Block { body, id: Cell::new(0) }))
 }
 
 fn break_statement(parser: &mut ParserState) -> StmtResult {
@@ -232,7 +228,7 @@ fn assignment(parser: &mut ParserState, variable: Box<Expr>) -> StmtResult {
 
     match variable.node {
         ExprNode::Variable{ name, .. } =>
-            Ok(create_stmt(line, StmtNode::Assignment{name, expr, resolve: ResolverData::new()})),
+            Ok(create_stmt(line, StmtNode::Assignment{name, expr, id: Cell::new(0)})),
         ExprNode::Get {..} => Ok(create_stmt(line, StmtNode::Set{get_expr: variable, expr})),
         _ => Err(parser.exception("Invalid assignment target"))
     }
@@ -389,7 +385,7 @@ fn primary(parser: &mut ParserState) -> ExprResult {
 
     let expr = match token.token_type {
         NUMBER | NIL | TRUE | FALSE | STRING => create_expr(token.line, ExprNode::Literal { value: token.literal }),
-        IDENTIFIER => create_expr(token.line, ExprNode::Variable{name: token, resolve: ResolverData::new()}),
+        IDENTIFIER => create_expr(token.line, ExprNode::Variable{name: token, id: Cell::new(0)}),
         LEFT_SQUARE => return list_init(parser),
         LEFT_PAREN => return grouping(parser),
         _ => return Err(parser.exception("Expect expression"))

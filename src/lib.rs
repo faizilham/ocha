@@ -53,9 +53,9 @@ fn parse_and_build(source : String) -> Result<Module, Vec<Exception>> {
     let tokens = lexer::scan(source)?;
     let statements = parser::parse(tokens)?;
 
-    let functions = resolver::resolve(&statements)?;
+    let resolver_info = resolver::resolve(&statements)?;
 
-    builder::build(statements, functions)
+    builder::build(statements, resolver_info)
 }
 
 fn execute(module: Module, io: &mut OchaIO) -> Result<(), Exception> {
