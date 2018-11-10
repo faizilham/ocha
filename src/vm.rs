@@ -57,8 +57,8 @@ pub enum Bytecode {
     RET,
 
     // closures
-    START_ENV,
-    CAPTURE(isize),
+    START_ENV(usize),
+    CAPTURE(isize, usize), // old_position, new_index
     CLOSE_ENV,
     CLOSE_ALL_ENV,
     LOAD_CLOSURE(usize, usize),
@@ -421,8 +421,8 @@ impl<'io> VM<'io> {
                 },
 
                 // closures
-                START_ENV => unimplemented!(),
-                CAPTURE(_) => unimplemented!(),
+                START_ENV(_) => unimplemented!(),
+                CAPTURE(_, _) => unimplemented!(),
                 CLOSE_ENV => unimplemented!(),
                 CLOSE_ALL_ENV => unimplemented!(),
                 LOAD_CLOSURE(_, _) => unimplemented!(),

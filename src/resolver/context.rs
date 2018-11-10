@@ -38,6 +38,7 @@ pub struct SymbolTable {
     var_offset: isize,
     capture_offset: isize,
 
+    pub context_id: usize,
     pub context_type: ContextType,
     pub context_level: usize,
     pub scope_level: usize,
@@ -48,7 +49,7 @@ pub struct SymbolTable {
 pub type SymbolTableRef = PRefCell<SymbolTable>;
 
 impl SymbolTable {
-    pub fn new (context_type: ContextType, context_level: usize, scope_level: usize, parent: Option<SymbolTableRef>) -> SymbolTable {
+    pub fn new (context_id: usize, context_type: ContextType, context_level: usize, scope_level: usize, parent: Option<SymbolTableRef>) -> SymbolTable {
         let mut var_offset = 0;
 
         if let Some(symtable) = &parent {
@@ -61,6 +62,7 @@ impl SymbolTable {
 
         SymbolTable {
             symbols: HashMap::new(),
+            context_id,
             var_offset,
             capture_offset: 0,
             context_type,
@@ -70,26 +72,26 @@ impl SymbolTable {
         }
     }
 
-    pub fn new_ref(context_type: ContextType, context_level: usize, scope_level: usize, parent: Option<SymbolTableRef>) -> SymbolTableRef {
-        new_prefcell(SymbolTable::new(context_type, context_level, scope_level, parent))
+    pub fn new_ref(context_id: usize, context_type: ContextType, context_level: usize, scope_level: usize, parent: Option<SymbolTableRef>) -> SymbolTableRef {
+        new_prefcell(SymbolTable::new(context_id, context_type, context_level, scope_level, parent))
     }
 
-    pub fn create_local_scope(parent: &SymbolTableRef) -> SymbolTableRef {
+    pub fn create_local_scope(parent: &SymbolTableRef, context_id: usize) -> SymbolTableRef {
         let (context_type, context_level, scope_level) = {
             let symtable = parent.borrow();
             (symtable.context_type, symtable.context_level, symtable.scope_level)
         };
 
-        SymbolTable::new_ref(context_type, context_level, scope_level + 1, Some(parent.clone()))
+        SymbolTable::new_ref(context_id, context_type, context_level, scope_level + 1, Some(parent.clone()))
     }
 
-    pub fn create_function_scope(parent: &SymbolTableRef) -> SymbolTableRef {
+    pub fn create_function_scope(parent: &SymbolTableRef, context_id: usize) -> SymbolTableRef {
         let (context_type, context_level) = {
             let symtable = parent.borrow();
             (ContextType::FuncCtx, symtable.context_level + 1)
         };
 
-        SymbolTable::new_ref(context_type, context_level, 0, Some(parent.clone()))
+        SymbolTable::new_ref(context_id, context_type, context_level, 0, Some(parent.clone()))
     }
 
     fn add(&mut self, name: &Token, symbol: PCell<SymbolType>) -> Result<(), Exception> {
@@ -117,8 +119,8 @@ impl SymbolTable {
         self.add(name, new_pcell(SymbolType::Var { id, offset, capture_offset }))
     }
 
-    pub fn add_func(&mut self, name: &Token, func_id: usize) -> Result<(), Exception> {
-        self.add(name, new_pcell(SymbolType::Func(func_id)))
+    pub fn add_func(&mut self, name: &Token, context_id: usize) -> Result<(), Exception> {
+        self.add(name, new_pcell(SymbolType::Func(context_id)))
     }
 
     pub fn get(&self, name: &Token) -> Option<PCell<SymbolType>> {
@@ -136,8 +138,18 @@ impl SymbolTable {
         capture_offset
     }
 
-    pub fn len(&self) -> usize {
-        self.symbols.len()
+    // pub fn len(&self) -> usize {
+    //     self.symbols.len()
+    // }
+
+    pub fn count_vars(&self) -> usize {
+        self.symbols.values().fold(0, |sum, symbol| {
+            if symbol.get().is_var() {
+                sum + 1
+            } else {
+                sum
+            }
+        })
     }
 
     pub fn declare_err(name: &Token) -> Exception {

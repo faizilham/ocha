@@ -11,8 +11,7 @@ pub enum Literal {
 pub struct FunctionSignature {
     pub entry_point: usize,
     pub num_args: usize,
-    pub has_captured: bool,
-    pub is_capturing: bool
+    pub is_closure: bool
 }
 
 impl FunctionSignature {
@@ -20,8 +19,7 @@ impl FunctionSignature {
         FunctionSignature {
             entry_point: 0,
             num_args,
-            has_captured: false,
-            is_capturing: false
+            is_closure: false
         }
     }
 }

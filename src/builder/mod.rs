@@ -6,7 +6,7 @@ use exception::Exception;
 use token::Token;
 use token::TokenType::*;
 use program_data::{Literal, FunctionSignature, LineData};
-use resolver::{ResolverInfo, ResolverData, ResolveType, SymbolType, ScopeData, VariableData};
+use resolver::{ResolverInfo, FunctionData, ResolverData, ResolveType, SymbolType, ScopeData, VariableData};
 use vm::{Bytecode, Module};
 
 mod block;
@@ -32,6 +32,18 @@ pub fn build(statements: Vec<Box<Stmt>>, resolver_info: ResolverInfo) -> Result<
     builder.emit(line, Bytecode::HALT);
 
     let Builder{blocks, literals, mut functions, ..} = builder;
+
+    // convert FunctionData to FunctionSignature
+    let mut functions = {
+        let mut function_signature = Vec::new();
+
+        for f in functions.drain(..) {
+            let FunctionData { signature, .. } =  f;
+            function_signature.push(signature);
+        }
+
+        function_signature
+    };
 
     let (codes, line_data) = enclose_and_merge(blocks, &mut functions);
 
@@ -67,12 +79,13 @@ struct Builder {
     current_subprog: BlockRef,
     literals: Vec<Literal>,
 
-    functions: Vec<FunctionSignature>,
+    functions: Vec<FunctionData>,
     scopes: Vec<ScopeData>,
     variables: Vec<VariableData>,
     resolves: Vec<ResolverData>,
 
     last_line: i32,
+    num_captured_vars: usize,
     loop_end_label: Label,
 }
 
@@ -101,6 +114,7 @@ impl Builder {
             resolves,
 
             last_line: 0,
+            num_captured_vars: 0,
             loop_end_label: -1,
         }
     }
@@ -148,7 +162,7 @@ impl Builder {
 
 impl StmtVisitor<StmtResult> for Builder {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
-        let ResolverData{symbol_type, resolve_type} = *self.resolves.get(id.get()).unwrap();
+        let ResolverData{symbol_type, resolve_type} = *self.resolves.get(id.get()).expect("Invalid resolve id in builder");
 
         if let SymbolType::Var{ offset, capture_offset, ..} = symbol_type {
             self.generate_expr(expr)?;
@@ -174,6 +188,37 @@ impl StmtVisitor<StmtResult> for Builder {
     }
 
     fn visit_block(&mut self, body: &Vec<Box<Stmt>>, id: &Cell<usize>) -> StmtResult {
+        // capture args
+        let line = self.last_line;
+
+        let capture_args_codes : Vec<Bytecode>;
+        let num_captured;
+        let num_vardecl;
+        {
+            let scope_data = self.scopes.get(id.get()).expect("Invalid scope id in builder");
+
+            num_captured = scope_data.num_captured;
+            num_vardecl = scope_data.num_vardecl;
+            capture_args_codes = scope_data.captured_args
+            .iter()
+            .map(|(offset, captured_offset)| {
+                Bytecode::CAPTURE(*offset, *captured_offset as usize)
+            })
+            .collect();
+        }
+
+        if num_captured > 0 {
+            self.emit(line, Bytecode::START_ENV(num_captured));
+        }
+
+        for bytecode in capture_args_codes {
+            self.emit(line, bytecode);
+        }
+
+        // process body
+        let current_num_captured = self.num_captured_vars;
+        self.num_captured_vars = num_captured;
+
         let mut block_returned = false;
         for statement in body {
             block_returned = self.generate(statement)?;
@@ -183,18 +228,20 @@ impl StmtVisitor<StmtResult> for Builder {
             }
         }
 
-        // pop local scope variables
-        let count;
-        {
-            let scope = self.scopes.get(id.get()).unwrap();
-            count = scope.num_vardecl;
-        }
-
+        self.num_captured_vars = current_num_captured;
 
         let line = self.last_line;
-        self.emit(line, Bytecode::POP(count));
 
-        // TODO: handle has_captured
+        // close_env is not returned and has captured
+        if !block_returned && num_captured > 0 {
+            self.emit(line, Bytecode::CLOSE_ENV);
+        }
+
+        // pop local scope variables
+        if num_vardecl > 0 {
+            self.emit(line, Bytecode::POP(num_vardecl));
+        }
+
 
         // TODO: handle restore on exception
 
@@ -221,14 +268,42 @@ impl StmtVisitor<StmtResult> for Builder {
         Ok(false)
     }
 
-    fn visit_funcdecl(&mut self, _name: &Token, _args: &Vec<Token>, body: &Vec<Box<Stmt>>, id: &Cell<usize>) -> StmtResult {
+    fn visit_funcdecl(&mut self, name: &Token, _args: &Vec<Token>, body: &Vec<Box<Stmt>>, id: &Cell<usize>) -> StmtResult {
         let subprog = self.current_subprog.clone();
 
+        let func_id = id.get();
+
         // start function block
-        let func_block = self.get_function_block(id.get());
+        let func_block = self.get_function_block(func_id);
         self.current_subprog = func_block;
 
-        // push new symbol table and put args inside it
+        // capture args
+
+        let capture_args_codes : Vec<Bytecode>;
+        let num_captured;
+        {
+            let scope_data = self.functions.get(func_id).expect("Invalid function id in builder");
+
+            num_captured = scope_data.num_captured;
+            capture_args_codes = scope_data.captured_args
+            .iter()
+            .map(|(offset, captured_offset)| {
+                Bytecode::CAPTURE(*offset, *captured_offset as usize)
+            })
+            .collect();
+        }
+
+        if num_captured > 0 {
+            self.emit(name.line, Bytecode::START_ENV(num_captured));
+        }
+
+        for bytecode in capture_args_codes {
+            self.emit(name.line, bytecode);
+        }
+
+        // generate bidy
+        let current_num_captured = self.num_captured_vars;
+        self.num_captured_vars = num_captured;
 
         let mut block_returned = false;
 
@@ -240,12 +315,20 @@ impl StmtVisitor<StmtResult> for Builder {
             }
         }
 
+        self.num_captured_vars = current_num_captured;
+
+
         if !block_returned {
             // add empty return if not yet exist
             // TODO: handle has_captured
 
             let line = self.last_line;
             self.emit(line, Bytecode::NIL);
+
+            if num_captured > 0 {
+                self.emit(line, Bytecode::CLOSE_ALL_ENV);
+            }
+
             self.emit(line, Bytecode::RET);
         }
 
@@ -316,6 +399,11 @@ impl StmtVisitor<StmtResult> for Builder {
             self.emit(line, Bytecode::NIL);
         }
 
+        // emit CLOSE_ALL_ENV if num_captured > 0
+        if self.num_captured_vars > 0 {
+            self.emit(line, Bytecode::CLOSE_ALL_ENV);
+        }
+
         self.emit(line, Bytecode::RET);
 
         Ok(true)
@@ -335,9 +423,15 @@ impl StmtVisitor<StmtResult> for Builder {
         }
     }
 
-    fn visit_vardecl(&mut self, _name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
+    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
         // TODO: handle is_captured
         self.generate_expr(expr)?;
+
+        let var_data = *self.variables.get(id.get()).expect("Invalid variable id in builder");
+
+        if var_data.is_captured {
+            self.emit(name.line, Bytecode::CAPTURE(var_data.offset, var_data.captured_offset as usize));
+        }
 
         Ok(false)
     }
@@ -508,8 +602,7 @@ impl ExprVisitor<ExprResult> for Builder {
     }
 
     fn visit_variable(&mut self, name: &Token, id: &Cell<usize>) -> ExprResult {
-
-        let ResolverData{symbol_type, resolve_type} = *self.resolves.get(id.get()).unwrap();
+        let ResolverData{symbol_type, resolve_type} = *self.resolves.get(id.get()).expect("Invalid resolve id in builder");
 
         // TODO: handle closure
 

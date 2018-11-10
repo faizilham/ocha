@@ -23,7 +23,6 @@ pub enum ResolveType {
 use self::ResolveType::*;
 use self::ContextType::*;
 
-#[derive(Debug)]
 pub struct ResolverData {
     pub resolve_type: ResolveType,
     pub symbol_type: SymbolType,
@@ -35,29 +34,53 @@ impl ResolverData {
     }
 }
 
+pub struct FunctionData {
+    pub signature: FunctionSignature,
+    pub captured_args: Vec<(isize, isize)>, // offset, captured offset
+    pub num_captured: usize,
+}
+
+impl FunctionData {
+    pub fn new(num_args: usize) -> Self {
+        Self {
+            signature: FunctionSignature::new(num_args),
+            captured_args: Vec::new(),
+            num_captured: 0
+        }
+    }
+}
+
 pub struct ScopeData {
-    pub has_captured: bool,
-    pub num_vardecl: usize
+    pub num_vardecl: usize,
+    pub captured_args: Vec<(isize, isize)>, // offset, captured index
+    pub num_captured: usize,
 }
 
 impl ScopeData {
     pub fn new() -> Self {
-        Self { has_captured: false, num_vardecl: 0}
+        Self {
+            captured_args: Vec::new(),
+            num_vardecl: 0,
+            num_captured: 0
+        }
     }
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct VariableData {
-    pub is_captured: bool
+    pub is_captured: bool,
+    pub offset: isize,
+    pub captured_offset: isize
 }
 
 impl VariableData {
-    pub fn new() -> Self {
-        Self { is_captured: false }
+    pub fn new(offset: isize) -> Self {
+        Self { is_captured: false, offset, captured_offset: -1 }
     }
 }
 
 pub struct ResolverInfo {
-    pub functions: Vec<FunctionSignature>,
+    pub functions: Vec<FunctionData>,
     pub scopes: Vec<ScopeData>,
     pub variables: Vec<VariableData>,
     pub resolves: Vec<ResolverData>
@@ -82,7 +105,7 @@ pub fn resolve(statements: &Vec<Box<Stmt>>) -> Result<ResolverInfo, Vec<Exceptio
 
 struct Resolver {
     symbol_table: SymbolTableRef,
-    functions: Vec<FunctionSignature>,
+    functions: Vec<FunctionData>,
     scopes: Vec<ScopeData>,
     variables: Vec<VariableData>,
     resolves: Vec<ResolverData>,
@@ -96,10 +119,12 @@ type ExprResult = Result<(bool), Exception>; // has_closure
 
 impl Resolver {
     pub fn new() -> Resolver {
-        let functions = vec![ FunctionSignature::new(0) ]; // first function = global code
+        let functions = vec![
+            FunctionData::new(0) // first function = global code
+        ];
 
         Resolver {
-            symbol_table: SymbolTable::new_ref(GlobalCtx, 0, 0, None),
+            symbol_table: SymbolTable::new_ref(0, GlobalCtx, 0, 0, None),
             functions,
             scopes: Vec::new(),
             variables: Vec::new(),
@@ -128,17 +153,17 @@ impl Resolver {
     // symbols
     fn add_var(&mut self, name: &Token) -> Result<usize, Exception> {
         let var_id = self.variables.len();
-        self.variables.push(VariableData::new());
 
         let mut symtable = self.symbol_table.borrow_mut();
-        symtable.add_var(name, var_id)?;
+        let offset = symtable.add_var(name, var_id)?;
+        self.variables.push(VariableData::new(offset));
 
         Ok(var_id)
     }
 
     fn add_func(&mut self, name: &Token, num_args: usize) -> Result<usize, Exception> {
         let func_id = self.functions.len();
-        self.functions.push(FunctionSignature::new(num_args));
+        self.functions.push(FunctionData::new(num_args));
 
         let mut symtable = self.symbol_table.borrow_mut();
         symtable.add_func(name, func_id)?;
@@ -165,11 +190,15 @@ impl Resolver {
 
         let offset_start = -(args.len() as isize + STACK_FRAME_SIZE);
 
-
+        let var_id_start = self.variables.len();
         let mut i = 0;
+
         for arg in args {
-            // TODO: handle id & closure offset for args
-            symtable.add_var_offset(arg, 0, i + offset_start)?;
+            let id = var_id_start + i;
+            let offset = (i as isize) + offset_start;
+
+            symtable.add_var_offset(arg, id, offset)?;
+            self.variables.push(VariableData::new(offset));
             i += 1;
         }
 
@@ -192,7 +221,7 @@ impl Resolver {
                 let mut table = rf.borrow_mut();
                 let context_type = table.context_type;
                 let context_level = table.context_level;
-                let scope_level = table.scope_level;
+                let is_top_scope = table.scope_level == 0;
 
                 if let Some(symbol) = table.get(name) {
                     let resolve_type;
@@ -200,7 +229,7 @@ impl Resolver {
                     if context_level == current_context_level {
                         // local if in the same context
                         resolve_type = Local;
-                    } else if context_type == GlobalCtx && scope_level == 0 {
+                    } else if context_type == GlobalCtx && is_top_scope {
                         // always global if in outermost scope of global context
                         resolve_type = Global;
                     } else if let SymbolType::Var{id, offset, capture_offset} = symbol.get() {
@@ -209,7 +238,27 @@ impl Resolver {
                         // update closure index and is_captured if not yet referenced as closure
                         if capture_offset < 0 {
                             let capture_offset = table.increase_capture_offset();
-                            self.variables.get_mut(id).unwrap().is_captured = true;
+
+                            let vardata = self.variables.get_mut(id).expect("Invalid resolved variable id");
+                            vardata.is_captured = true;
+                            vardata.captured_offset = capture_offset;
+
+                            // update count and captured args in function / scope
+                            if is_top_scope {
+                                let function_data = self.functions.get_mut(table.context_id).expect("Invalid resolved function id");
+                                function_data.num_captured += 1;
+
+                                if offset < 0 {
+                                    function_data.captured_args.push((offset, capture_offset));
+                                }
+                            } else {
+                                let scope_data = self.scopes.get_mut(table.context_id).expect("Invalid resolved scope id");
+                                scope_data.num_captured += 1;
+
+                                if offset < 0 {
+                                    scope_data.captured_args.push((offset, capture_offset));
+                                }
+                            }
 
                             symbol.set(SymbolType::Var{id, offset, capture_offset});
                         }
@@ -259,7 +308,7 @@ impl StmtVisitor<StmtResult> for Resolver {
 
         // create new symbol table
         let current_symtable = self.symbol_table.clone();
-        let new_symtable = SymbolTable::create_local_scope(&self.symbol_table);
+        let new_symtable = SymbolTable::create_local_scope(&self.symbol_table, scope_id);
         self.symbol_table = new_symtable;
 
         let mut block_returned = false;
@@ -273,7 +322,7 @@ impl StmtVisitor<StmtResult> for Resolver {
         }
 
         // end function
-        let count = self.symbol_table.borrow().len();
+        let count = self.symbol_table.borrow().count_vars();
 
         if count > 0 {
             let scope = self.scopes.get_mut(scope_id).unwrap();
@@ -281,7 +330,6 @@ impl StmtVisitor<StmtResult> for Resolver {
         }
 
         self.symbol_table = current_symtable;
-        // TODO: update has_captured
 
         Ok(block_returned)
     }
@@ -303,7 +351,7 @@ impl StmtVisitor<StmtResult> for Resolver {
 
         // create new symbol table
         let current_symtable = self.symbol_table.clone();
-        let new_symtable = SymbolTable::create_function_scope(&self.symbol_table);
+        let new_symtable = SymbolTable::create_function_scope(&self.symbol_table, func_id);
         self.symbol_table = new_symtable;
 
         // push new symbol table and put args inside it
@@ -319,8 +367,6 @@ impl StmtVisitor<StmtResult> for Resolver {
 
         // end function
         self.symbol_table = current_symtable;
-        // TODO: update has_captured
-
 
         Ok(false)
     }
@@ -347,8 +393,6 @@ impl StmtVisitor<StmtResult> for Resolver {
     }
 
     fn visit_return(&mut self, expr: &Option<Box<Expr>>) -> StmtResult {
-        // TODO: handle func context has_captured
-
         if let Some(expr) = expr {
             self.resolve_expr(expr)?;
         }
