@@ -23,3 +23,18 @@ if (true) {
 let c = "c_out";
 
 print(a, c);                    // out c_out
+
+fn test(a) {
+    print(a);
+
+    if (a) {
+        let a = "in_test";
+        print(a);
+
+        return true;
+    }
+
+    return false;
+}
+
+test("start");                  // start \n in_test

@@ -232,16 +232,17 @@ impl StmtVisitor<StmtResult> for Builder {
 
         let line = self.last_line;
 
-        // close_env is not returned and has captured
-        if !block_returned && num_captured > 0 {
-            self.emit(line, Bytecode::CLOSE_ENV);
-        }
+        if !block_returned {
+            // close_env has captured
+            if num_captured > 0 {
+                self.emit(line, Bytecode::CLOSE_ENV);
+            }
 
-        // pop local scope variables
-        if num_vardecl > 0 {
-            self.emit(line, Bytecode::POP(num_vardecl));
+            // pop local scope variables
+            if num_vardecl > 0 {
+                self.emit(line, Bytecode::POP(num_vardecl));
+            }
         }
-
 
         // TODO: handle restore on exception
 

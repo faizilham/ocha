@@ -3,3 +3,5 @@ inner b_out
 inner2 b_in
 inner b_in c_in
 out c_out
+start
+in_test
