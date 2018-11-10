@@ -2,6 +2,7 @@ use std::cell::Cell;
 
 use ast::expr::{Expr, ExprVisitor};
 use ast::stmt::{Stmt, StmtVisitor};
+use helper::PCell;
 use program_data::{Literal, FunctionSignature};
 use token::Token;
 use exception::Exception;
@@ -130,7 +131,7 @@ impl Resolver {
         self.variables.push(VariableData::new());
 
         let mut symtable = self.symbol_table.borrow_mut();
-        symtable.add_var(name)?;
+        symtable.add_var(name, var_id)?;
 
         Ok(var_id)
     }
@@ -164,16 +165,18 @@ impl Resolver {
 
         let offset_start = -(args.len() as isize + STACK_FRAME_SIZE);
 
+
         let mut i = 0;
         for arg in args {
-            symtable.add_var_offset(arg, i + offset_start)?;
+            // TODO: handle id & closure offset for args
+            symtable.add_var_offset(arg, 0, i + offset_start)?;
             i += 1;
         }
 
         Ok(())
     }
 
-    fn get_symbol(&self, name: &Token) -> Result<(SymbolType, ResolveType), Exception> {
+    fn get_symbol(&mut self, name: &Token) -> Result<(PCell<SymbolType>, ResolveType), Exception> {
         let mut rf = self.symbol_table.clone();
 
         let current_context_level;
@@ -186,7 +189,7 @@ impl Resolver {
 
         loop {
             rf = {
-                let table = rf.borrow();
+                let mut table = rf.borrow_mut();
                 let context_type = table.context_type;
                 let context_level = table.context_level;
                 let scope_level = table.scope_level;
@@ -197,14 +200,24 @@ impl Resolver {
                     if context_level == current_context_level {
                         // local if in the same context
                         resolve_type = Local;
-                    } else if !symbol.is_var() {
-                        // functions are always globally resolved
-                        resolve_type = Global;
                     } else if context_type == GlobalCtx && scope_level == 0 {
                         // always global if in outermost scope of global context
                         resolve_type = Global;
-                    } else {
+                    } else if let SymbolType::Var{id, offset, capture_offset} = symbol.get() {
+                        // if a variable not local nor global, it is a closure
+
+                        // update closure index and is_captured if not yet referenced as closure
+                        if capture_offset < 0 {
+                            let capture_offset = table.increase_capture_offset();
+                            self.variables.get_mut(id).unwrap().is_captured = true;
+
+                            symbol.set(SymbolType::Var{id, offset, capture_offset});
+                        }
+
                         resolve_type = Closure(env_level);
+                    } else {
+                        // functions are always globally resolved
+                        resolve_type = Global;
                     }
 
                     return Ok((symbol, resolve_type));
@@ -224,15 +237,14 @@ impl Resolver {
 
 impl StmtVisitor<StmtResult> for Resolver {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
-        let (symbol_type, resolve_type) = self.get_symbol(name)?;
+        let (symbol, resolve_type) = self.get_symbol(name)?;
+        let symbol_type = symbol.get();
 
-        if let SymbolType::Var(_) = symbol_type {
+        if let SymbolType::Var{..} = symbol_type {
             self.resolve_expr(expr)?;
 
             let var_id = self.add_resolve(resolve_type, symbol_type);
             id.set(var_id);
-
-            // TODO: change is_captured if resolve type is closure
 
             return Ok(false);
         }
@@ -297,10 +309,8 @@ impl StmtVisitor<StmtResult> for Resolver {
         // push new symbol table and put args inside it
         self.add_args(args)?;
 
-        let mut block_returned = false;
-
         for stmt in body {
-            block_returned = self.resolve(stmt)?;
+            let block_returned = self.resolve(stmt)?;
 
             if block_returned {
                 break;
@@ -312,7 +322,7 @@ impl StmtVisitor<StmtResult> for Resolver {
         // TODO: update has_captured
 
 
-        Ok(block_returned)
+        Ok(false)
     }
 
     fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> StmtResult {
@@ -338,6 +348,7 @@ impl StmtVisitor<StmtResult> for Resolver {
 
     fn visit_return(&mut self, expr: &Option<Box<Expr>>) -> StmtResult {
         // TODO: handle func context has_captured
+
         if let Some(expr) = expr {
             self.resolve_expr(expr)?;
         }
@@ -429,12 +440,11 @@ impl ExprVisitor<ExprResult> for Resolver {
     fn visit_variable(&mut self, name: &Token, id: &Cell<usize>) -> ExprResult {
         let (symbol_type, resolve_type) = self.get_symbol(name)?;
 
-        let var_id = self.add_resolve(resolve_type, symbol_type);
+        let var_id = self.add_resolve(resolve_type, symbol_type.get());
         id.set(var_id);
 
         let mut is_capturing = false;
         if let Closure(_) = resolve_type {
-            // TODO: change is_captured if resolve type is closure
             is_capturing = true;
         }
 

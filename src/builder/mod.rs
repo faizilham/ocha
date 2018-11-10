@@ -150,14 +150,20 @@ impl StmtVisitor<StmtResult> for Builder {
     fn visit_assignment(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
         let ResolverData{symbol_type, resolve_type} = *self.resolves.get(id.get()).unwrap();
 
-        if let SymbolType::Var(offset) = symbol_type {
+        if let SymbolType::Var{ offset, capture_offset, ..} = symbol_type {
             self.generate_expr(expr)?;
 
             // TODO: handle closure
             let bytecode = match resolve_type {
-                ResolveType::Global     => Bytecode::STORE_GLOBAL(offset),
-                ResolveType::Local      => Bytecode::STORE(offset),
-                ResolveType::Closure(_) => unimplemented!(),
+                ResolveType::Global         => Bytecode::STORE_GLOBAL(offset),
+                ResolveType::Local          => Bytecode::STORE(offset),
+                ResolveType::Closure(level) => {
+                    if capture_offset < 0 {
+                        panic!("Negative capture offset for closure");
+                    }
+
+                    Bytecode::STORE_CLOSURE(level, capture_offset as usize)
+                }
             };
 
             self.emit(name.line, bytecode);
@@ -329,7 +335,7 @@ impl StmtVisitor<StmtResult> for Builder {
         }
     }
 
-    fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
+    fn visit_vardecl(&mut self, _name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
         // TODO: handle is_captured
         self.generate_expr(expr)?;
 
@@ -508,11 +514,17 @@ impl ExprVisitor<ExprResult> for Builder {
         // TODO: handle closure
 
         let bytecode = match symbol_type {
-            SymbolType::Var(offset) =>
+            SymbolType::Var{offset, capture_offset, ..} =>
                 match resolve_type {
-                    ResolveType::Global      => Bytecode::LOAD_GLOBAL(offset),
-                    ResolveType::Local       => Bytecode::LOAD(offset),
-                    ResolveType::Closure(_)  => unimplemented!(),
+                    ResolveType::Global         => Bytecode::LOAD_GLOBAL(offset),
+                    ResolveType::Local          => Bytecode::LOAD(offset),
+                    ResolveType::Closure(level) => {
+                        if capture_offset < 0 {
+                            panic!("Negative capture offset for closure");
+                        }
+
+                        Bytecode::LOAD_CLOSURE(level, capture_offset as usize)
+                    },
                 },
             SymbolType::Func(id)    => Bytecode::LOAD_FUNC(id),
         };

@@ -1,5 +1,5 @@
-use helper::{PRefCell, new_prefcell};
 use std::collections::HashMap;
+use helper::{PCell, PRefCell, new_pcell, new_prefcell};
 
 use exception::Exception;
 use exception::Exception::ParseErr;
@@ -15,13 +15,17 @@ pub enum ContextType {
 
 #[derive(Debug, Clone, Copy)]
 pub enum SymbolType {
-    Var(isize),
-    Func(usize),
+    Var {
+        id: usize,
+        offset: isize,
+        capture_offset: isize,
+    },
+    Func(usize),            // id
 }
 
 impl SymbolType {
     pub fn is_var(&self) -> bool {
-        if let SymbolType::Var(_) = self {
+        if let SymbolType::Var{..} = self {
             return true
         }
 
@@ -30,8 +34,10 @@ impl SymbolType {
 }
 
 pub struct SymbolTable {
-    symbols: HashMap<String, SymbolType>,
+    symbols: HashMap<String, PCell<SymbolType>>,
     var_offset: isize,
+    capture_offset: isize,
+
     pub context_type: ContextType,
     pub context_level: usize,
     pub scope_level: usize,
@@ -53,7 +59,15 @@ impl SymbolTable {
             }
         }
 
-        SymbolTable { symbols: HashMap::new(), var_offset, context_type, context_level, scope_level, parent }
+        SymbolTable {
+            symbols: HashMap::new(),
+            var_offset,
+            capture_offset: 0,
+            context_type,
+            context_level,
+            scope_level,
+            parent
+        }
     }
 
     pub fn new_ref(context_type: ContextType, context_level: usize, scope_level: usize, parent: Option<SymbolTableRef>) -> SymbolTableRef {
@@ -78,7 +92,7 @@ impl SymbolTable {
         SymbolTable::new_ref(context_type, context_level, 0, Some(parent.clone()))
     }
 
-    fn add(&mut self, name: &Token, symbol: SymbolType) -> Result<(), Exception> {
+    fn add(&mut self, name: &Token, symbol: PCell<SymbolType>) -> Result<(), Exception> {
         if self.symbols.contains_key(&name.lexeme) {
             return Err (
                 ParseErr(name.line, format!("Identifier '{}' is already declared", &name.lexeme))
@@ -90,28 +104,36 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub fn add_var(&mut self, name: &Token) -> Result<isize, Exception> {
+    pub fn add_var(&mut self, name: &Token, id: usize) -> Result<isize, Exception> {
         let offset = self.var_offset;
-        self.add_var_offset(name, offset)?;
+        self.add_var_offset(name, id, offset)?;
         self.var_offset += 1;
 
         Ok(offset)
     }
 
-    pub fn add_var_offset(&mut self, name: &Token, offset: isize) -> Result<(), Exception> {
-        self.add(name, SymbolType::Var(offset))
+    pub fn add_var_offset(&mut self, name: &Token, id: usize, offset: isize) -> Result<(), Exception> {
+        let capture_offset = -1;
+        self.add(name, new_pcell(SymbolType::Var { id, offset, capture_offset }))
     }
 
     pub fn add_func(&mut self, name: &Token, func_id: usize) -> Result<(), Exception> {
-        self.add(name, SymbolType::Func(func_id))
+        self.add(name, new_pcell(SymbolType::Func(func_id)))
     }
 
-    pub fn get(&self, name: &Token) -> Option<SymbolType> {
+    pub fn get(&self, name: &Token) -> Option<PCell<SymbolType>> {
         if let Some(symbol) = self.symbols.get(&name.lexeme) {
-            Some(*symbol)
+            Some(symbol.clone())
         } else {
             None
         }
+    }
+
+    pub fn increase_capture_offset(&mut self) -> isize {
+        let capture_offset = self.capture_offset;
+        self.capture_offset += 1;
+
+        capture_offset
     }
 
     pub fn len(&self) -> usize {

@@ -56,6 +56,15 @@ pub enum Bytecode {
     CALL(usize),
     RET,
 
+    // closures
+    START_ENV,
+    CAPTURE(isize),
+    CLOSE_ENV,
+    CLOSE_ALL_ENV,
+    LOAD_CLOSURE(usize, usize),
+    STORE_CLOSURE(usize, usize),
+
+
     // to be removed
     PRINT(usize),
 }
@@ -409,7 +418,15 @@ impl<'io> VM<'io> {
                     self.push(ret_val);
                     self.fp = fp;
                     self.ip = ip;
-                }
+                },
+
+                // closures
+                START_ENV => unimplemented!(),
+                CAPTURE(_) => unimplemented!(),
+                CLOSE_ENV => unimplemented!(),
+                CLOSE_ALL_ENV => unimplemented!(),
+                LOAD_CLOSURE(_, _) => unimplemented!(),
+                STORE_CLOSURE(_, _) => unimplemented!(),
 
                 PRINT(count) => {
                     let start = self.stack.len() - count;
