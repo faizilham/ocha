@@ -171,7 +171,7 @@ impl StmtVisitor<StmtResult> for Builder {
             let bytecode = match resolve_type {
                 ResolveType::Global         => Bytecode::STORE_GLOBAL(offset),
                 ResolveType::Local          => Bytecode::STORE(offset),
-                ResolveType::Closure(level) => {
+                ResolveType::Closure(level, ..) => {
                     if capture_offset < 0 {
                         panic!("Negative capture offset for closure");
                     }
@@ -191,32 +191,19 @@ impl StmtVisitor<StmtResult> for Builder {
         // capture args
         let line = self.last_line;
 
-        let capture_args_codes : Vec<Bytecode>;
         let num_captured;
+        let need_env;
         let num_vardecl;
         {
             let scope_data = self.scopes.get(id.get()).expect("Invalid scope id in builder");
 
             num_captured = scope_data.num_captured;
             num_vardecl = scope_data.num_vardecl;
-            capture_args_codes = scope_data.captured_args
-            .iter()
-            .map(|(offset, captured_offset)| {
-                if *captured_offset < 0 {
-                    panic!("Negative capture offset for closure");
-                }
-
-                Bytecode::CAPTURE(*offset, *captured_offset as usize)
-            })
-            .collect();
+            need_env = scope_data.need_env;
         }
 
-        if num_captured > 0 {
+        if need_env {
             self.emit(line, Bytecode::START_SCOPE_ENV(num_captured));
-        }
-
-        for bytecode in capture_args_codes {
-            self.emit(line, bytecode);
         }
 
         // process body
@@ -238,7 +225,7 @@ impl StmtVisitor<StmtResult> for Builder {
 
         if !block_returned {
             // close_env has captured
-            if num_captured > 0 {
+            if need_env {
                 self.emit(line, Bytecode::CLOSE_ENV);
             }
 
@@ -283,26 +270,27 @@ impl StmtVisitor<StmtResult> for Builder {
         self.current_subprog = func_block;
 
         // capture args
-
         let capture_args_codes : Vec<Bytecode>;
         let num_captured;
+        let need_env;
         {
-            let scope_data = self.functions.get(func_id).expect("Invalid function id in builder");
+            let function_data = self.functions.get(func_id).expect("Invalid function id in builder");
 
-            num_captured = scope_data.num_captured;
-            capture_args_codes = scope_data.captured_args
-            .iter()
-            .map(|(offset, captured_offset)| {
-                if *captured_offset < 0 {
-                    panic!("Negative capture offset for closure");
-                }
+            num_captured = function_data.num_captured;
+            need_env = function_data.need_env;
+            capture_args_codes = function_data.captured_args
+                .iter()
+                .map(|(offset, captured_offset)| {
+                    if *captured_offset < 0 {
+                        panic!("Negative capture offset for closure");
+                    }
 
-                Bytecode::CAPTURE(*offset, *captured_offset as usize)
-            })
-            .collect();
+                    Bytecode::CAPTURE(*offset, *captured_offset as usize)
+                })
+                .collect();
         }
 
-        if num_captured > 0 {
+        if need_env {
             self.emit(name.line, Bytecode::START_ENV(num_captured));
         }
 
@@ -334,7 +322,7 @@ impl StmtVisitor<StmtResult> for Builder {
             let line = self.last_line;
             self.emit(line, Bytecode::NIL);
 
-            if num_captured > 0 {
+            if need_env {
                 self.emit(line, Bytecode::CLOSE_ALL_ENV);
             }
 
@@ -628,7 +616,7 @@ impl ExprVisitor<ExprResult> for Builder {
                 match resolve_type {
                     ResolveType::Global         => Bytecode::LOAD_GLOBAL(offset),
                     ResolveType::Local          => Bytecode::LOAD(offset),
-                    ResolveType::Closure(level) => {
+                    ResolveType::Closure(level, ..) => {
                         if capture_offset < 0 {
                             panic!("Negative capture offset for closure");
                         }

@@ -18,3 +18,21 @@ fn internal_count(n) {
 let incr = internal_count(3);   // 1 \n 2 \n 3
 incr();                         // 4
 incr();                         // 5
+
+let fc;
+
+{
+    {
+        let c = 0;
+        fn cc() {
+            c = c + 1;
+            print(c);
+        }
+
+        fc = cc;
+    }
+}
+
+fc();                       // 1
+fc();                       // 2
+fc();                       // 3

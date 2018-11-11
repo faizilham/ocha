@@ -475,6 +475,7 @@ impl<'io> VM<'io> {
                     let captured_var = env.get(1, new_index);
                     let mut var = captured_var.borrow_mut();
 
+
                     // TODO: handle negative
                     *var = CapturedVar::Unclosed((fp + old_position) as usize);
                 }

@@ -17,7 +17,7 @@ use self::context::{ContextType, SymbolTable, SymbolTableRef};
 pub enum ResolveType {
     Global,
     Local,
-    Closure(usize)
+    Closure(usize, bool)      // level, first_time_referenced
 }
 
 use self::ResolveType::*;
@@ -38,6 +38,7 @@ pub struct FunctionData {
     pub signature: FunctionSignature,
     pub captured_args: Vec<(isize, isize)>, // offset, captured offset
     pub num_captured: usize,
+    pub need_env: bool,
 }
 
 impl FunctionData {
@@ -45,23 +46,24 @@ impl FunctionData {
         Self {
             signature: FunctionSignature::new(num_args),
             captured_args: Vec::new(),
-            num_captured: 0
+            num_captured: 0,
+            need_env: false
         }
     }
 }
 
 pub struct ScopeData {
     pub num_vardecl: usize,
-    pub captured_args: Vec<(isize, isize)>, // offset, captured index
     pub num_captured: usize,
+    pub need_env: bool,
 }
 
 impl ScopeData {
     pub fn new() -> Self {
         Self {
-            captured_args: Vec::new(),
             num_vardecl: 0,
-            num_captured: 0
+            num_captured: 0,
+            need_env: false
         }
     }
 }
@@ -171,8 +173,55 @@ impl Resolver {
         Ok(func_id)
     }
 
-    fn add_resolve(&mut self, resolve_type: ResolveType, symbol_type: SymbolType) -> usize {
+    fn add_resolve(&mut self, resolve_type: ResolveType, symbol: PCell<SymbolType>) -> usize {
         let id = self.resolves.len();
+        let symbol_type = symbol.get();
+
+        if let Closure(level, true) = resolve_type {
+            if let SymbolType::Var{offset, capture_offset, ..} = symbol_type {
+
+                // mark need_env for all symbol table up to closure source
+                let mut rf = self.symbol_table.clone();
+
+                for i in 0..level {
+                    // go to parent
+                    rf = {
+                        let table = rf.borrow();
+                        if let Some(parent) = &table.parent {
+                            parent.clone()
+                        } else {
+                            panic!("Invalid parent symbol table access in resolver");
+                        }
+                    };
+
+                    let table = rf.borrow();
+                    let is_top_scope = table.scope_level == 0;
+                    let is_source_env = i == level - 1;
+
+                    if is_top_scope {
+                        let function_data = self.functions.get_mut(table.context_id).expect("Invalid resolved function id");
+                        function_data.need_env = true;
+
+                        if is_source_env {
+                            function_data.num_captured += 1;
+
+                            if offset < 0 {
+                                function_data.captured_args.push((offset, capture_offset));
+                            }
+                        }
+                    } else {
+                        let scope_data = self.scopes.get_mut(table.context_id).expect("Invalid resolved scope id");
+                        scope_data.need_env = true;
+                        if is_source_env {
+                            scope_data.num_captured += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+
+
         self.resolves.push(ResolverData::new(resolve_type, symbol_type));
 
         id
@@ -235,35 +284,20 @@ impl Resolver {
                     } else if let SymbolType::Var{id, offset, capture_offset} = symbol.get() {
                         // if a variable not local nor global, it is a closure
 
+                        let first_time_referenced = capture_offset < 0;
+
                         // update closure index and is_captured if not yet referenced as closure
-                        if capture_offset < 0 {
+                        if first_time_referenced {
                             let capture_offset = table.increase_capture_offset();
 
                             let vardata = self.variables.get_mut(id).expect("Invalid resolved variable id");
                             vardata.is_captured = true;
                             vardata.captured_offset = capture_offset;
 
-                            // update count and captured args in function / scope
-                            if is_top_scope {
-                                let function_data = self.functions.get_mut(table.context_id).expect("Invalid resolved function id");
-                                function_data.num_captured += 1;
-
-                                if offset < 0 {
-                                    function_data.captured_args.push((offset, capture_offset));
-                                }
-                            } else {
-                                let scope_data = self.scopes.get_mut(table.context_id).expect("Invalid resolved scope id");
-                                scope_data.num_captured += 1;
-
-                                if offset < 0 {
-                                    scope_data.captured_args.push((offset, capture_offset));
-                                }
-                            }
-
                             symbol.set(SymbolType::Var{id, offset, capture_offset});
                         }
 
-                        resolve_type = Closure(env_level);
+                        resolve_type = Closure(env_level, first_time_referenced);
                     } else {
                         // functions are always globally resolved
                         resolve_type = Global;
@@ -292,7 +326,7 @@ impl StmtVisitor<StmtResult> for Resolver {
         if let SymbolType::Var{..} = symbol_type {
             let mut is_capturing = self.resolve_expr(expr)?;
 
-            let var_id = self.add_resolve(resolve_type, symbol_type);
+            let var_id = self.add_resolve(resolve_type, symbol);
             id.set(var_id);
 
             if let Closure(..) = resolve_type {
@@ -508,13 +542,13 @@ impl ExprVisitor<ExprResult> for Resolver {
     }
 
     fn visit_variable(&mut self, name: &Token, id: &Cell<usize>) -> ExprResult {
-        let (symbol_type, resolve_type) = self.get_symbol(name)?;
+        let (symbol, resolve_type) = self.get_symbol(name)?;
 
-        let var_id = self.add_resolve(resolve_type, symbol_type.get());
+        let var_id = self.add_resolve(resolve_type, symbol);
         id.set(var_id);
 
         let mut is_capturing = false;
-        if let Closure(_) = resolve_type {
+        if let Closure(..) = resolve_type {
             is_capturing = true;
         }
 

@@ -1,0 +1,93 @@
+fn g_maker_factory() {
+    let a = 0;
+
+    fn g_maker() {
+        let b = 0;
+
+        fn g () {
+            a = a + 1;
+            b = b + 1;
+            print(a, b);
+        }
+
+        return g;
+    }
+
+    return g_maker;
+}
+
+let g_maker1 = g_maker_factory();
+let g_maker2 = g_maker_factory();
+
+let g11 = g_maker1();
+let g12 = g_maker1();
+let g21 = g_maker2();
+let g22 = g_maker2();
+
+g11();                                      // 1 1
+g11();                                      // 2 2
+g12();                                      // 3 1
+g21();                                      // 1 1
+g22();                                      // 2 1
+g11();                                      // 4 3
+
+fn f(x) {
+    let a = 0;
+    let b = 1;
+    let r1; let r2;
+
+    {
+        let b = 0;
+
+        fn create_f1() {
+            fn f1() {
+                a = a + x;
+                b = b + 1;
+                print(a, b);
+            }
+
+            return f1;
+        }
+
+        r1 = create_f1;
+    }
+
+    {
+        let b = 0;
+        let c = 2;
+
+        fn create_f2(x) {
+            fn f2() {
+                a = a + x;
+                b = b + c;
+                print(a, b);
+            }
+
+            return f2;
+        }
+
+        r2 = create_f2;
+    }
+
+    return [r1, r2];
+}
+
+
+let fs = f(2);
+let create_f1 = fs[0];
+let create_f2 = fs[1];
+
+let f11 = create_f1();
+let f12 = create_f1();
+
+let f21 = create_f2(3);
+let f22 = create_f2(3);
+
+f11();                                      // 2 1
+f12();                                      // 4 2
+f21();                                      // 7 2
+f22();                                      // 10 4
+f11();                                      // 12 3
+f12();                                      // 14 4
+f21();                                      // 17 6
+f22();                                      // 20 8

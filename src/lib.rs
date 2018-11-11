@@ -127,6 +127,11 @@ mod test {
         test("closure");
     }
 
+    #[test]
+    fn test_closure_complex() {
+        test("closure_complex");
+    }
+
     // Error cases
 
     #[test]
