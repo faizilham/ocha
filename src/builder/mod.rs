@@ -453,6 +453,10 @@ impl StmtVisitor<StmtResult> for Builder {
         let line = self.last_line;
 
         let while_start_pos = self.next_pos();
+        let while_start = self.create_label();
+
+        self.set_label_position(while_start, while_start_pos);
+
         let while_end = self.create_label();
 
         self.generate_expr(condition)?;
@@ -470,7 +474,7 @@ impl StmtVisitor<StmtResult> for Builder {
         // restore previous while label
         self.loop_end_label = last_label;
 
-        self.emit(line, Bytecode::BR(while_start_pos)); // br to top
+        self.branch_placeholder(line, BranchType::BR, while_start); // br to top
 
         let while_end_pos = self.next_pos();
         self.set_label_position(while_end, while_end_pos);
