@@ -29,3 +29,16 @@ fn factorial(n) {
 }
 
 print(-factorial(5));               // -120
+
+fn factorial_loop(n) {
+    let total = 1;
+
+    while (n >= 2) {
+        total = total * n;
+        n = n - 1;
+    }
+
+    return total;
+}
+
+print(factorial_loop(6));                // 720

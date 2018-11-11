@@ -26,17 +26,3 @@ while (i < 2) {
 }
 
 print(str);                     // abbabb
-
-fn test() {
-    let total = 0;
-    let i = 0;
-
-    while (i < 100) {
-        i = i + 1;
-        total = total + i;
-    }
-
-    print(total);                   // 5050
-}
-
-test();
