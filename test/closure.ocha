@@ -1,0 +1,20 @@
+fn internal_count(n) {
+    let count = 0;
+
+    fn incr() {
+        count = count + 1;
+        print(count);
+    }
+
+    let i = 0;
+    while (i < n) {
+        incr();
+        i = i + 1;
+    }
+
+    return incr;
+}
+
+let incr = internal_count(3);   // 1 \n 2 \n 3
+incr();                         // 4
+incr();                         // 5

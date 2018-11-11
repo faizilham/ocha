@@ -122,6 +122,11 @@ mod test {
         test("global");
     }
 
+    #[test]
+    fn test_closure() {
+        test("closure");
+    }
+
     // Error cases
 
     #[test]

@@ -8,7 +8,7 @@ use token::Token;
 use exception::Exception;
 
 mod context;
-const STACK_FRAME_SIZE : isize = 3;
+const STACK_FRAME_SIZE : isize = 4;
 
 pub use self::context::SymbolType;
 use self::context::{ContextType, SymbolTable, SymbolTableRef};

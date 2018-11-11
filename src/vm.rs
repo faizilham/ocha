@@ -7,8 +7,10 @@ use io::OchaIO;
 
 use program_data::{Literal, FunctionSignature, LineData};
 
-use value::{Value, OchaStr, VecList, OchaFunc};
+use value::{Value, OchaStr, VecList, OchaFunc, CapturedVar, Environment};
 use value::get_traceable;
+
+const STACK_FRAME_SIZE : isize = 4;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -58,11 +60,12 @@ pub enum Bytecode {
 
     // closures
     START_ENV(usize),
+    START_SCOPE_ENV(usize),
     CAPTURE(isize, usize), // old_position, new_index
     CLOSE_ENV,
     CLOSE_ALL_ENV,
-    LOAD_CLOSURE(usize, usize),
-    STORE_CLOSURE(usize, usize),
+    LOAD_CLOSURE(usize, usize), // level, new_index
+    STORE_CLOSURE(usize, usize), // level, new_index
 
 
     // to be removed
@@ -84,9 +87,11 @@ pub struct VM<'io> {
     functions: Vec<FunctionSignature>,
     constants: Vec<Value>,
     stack: Vec<Value>,
+    env_stack: Vec<HeapPtr<Environment>>,
     heap: Heap,
-    ip: usize,
-    fp: usize,
+    ip: usize,  // instruction pointer
+    fp: usize,  // frame pointer
+    efp: usize, // env frame pointer
     line_data: LineData,
     max_objects: usize,
 
@@ -100,6 +105,7 @@ impl<'io> VM<'io> {
         let Module { codes, mut literals, line_data, functions } = module;
 
         let stack = Vec::with_capacity(256);
+        let env_stack = Vec::with_capacity(256);
         let heap = Heap::new();
         let constants = Vec::with_capacity(literals.len());
 
@@ -108,10 +114,12 @@ impl<'io> VM<'io> {
             functions,
             constants,
             stack,
+            env_stack,
             heap,
             line_data,
             ip: 0,
             fp: 0,
+            efp: 0,
             max_objects: INITIAL_GC_THRESHOLD,
 
             io
@@ -374,7 +382,14 @@ impl<'io> VM<'io> {
                 // functions
                 LOAD_FUNC(id) => {
                     let signature = *self.functions.get(id).expect("Unknown function loaded");
-                    self.push(Func(OchaFunc::new(signature)));
+
+                    let mut env = None;
+
+                    if !self.stack_env_empty() {
+                        env = Some(self.top_env().clone());
+                    }
+
+                    self.push(Func(OchaFunc::new(signature, env)));
                 },
 
                 CALL(num_args) => {
@@ -390,12 +405,15 @@ impl<'io> VM<'io> {
                     };
 
                     let ip = self.ip as i64;
+                    let efp = self.efp as i64;
                     let fp = self.fp as i64;
 
                     self.push_int(ip);
+                    self.push_int(efp);
                     self.push_int(fp);
 
                     self.fp = self.stack.len();
+                    self.efp = self.env_stack.len();
                     self.ip = entry_point;
                 },
 
@@ -404,6 +422,7 @@ impl<'io> VM<'io> {
 
                     self.stack.truncate(self.fp);
                     let fp = self.pop_int() as usize;
+                    let efp = self.pop_int() as usize;
                     let ip = self.pop_int() as usize;
 
                     let num_args = if let Func(func) = self.pop() {
@@ -417,16 +436,101 @@ impl<'io> VM<'io> {
 
                     self.push(ret_val);
                     self.fp = fp;
+                    self.efp = efp;
                     self.ip = ip;
                 },
 
                 // closures
-                START_ENV(_) => unimplemented!(),
-                CAPTURE(_, _) => unimplemented!(),
-                CLOSE_ENV => unimplemented!(),
-                CLOSE_ALL_ENV => unimplemented!(),
-                LOAD_CLOSURE(_, _) => unimplemented!(),
-                STORE_CLOSURE(_, _) => unimplemented!(),
+                START_ENV(size) => {
+                    let parent;
+                    if let Func(func) = self.get_current_function() {
+                        parent = func.get_env();
+                    } else {
+                        panic!("Invalid function type for START_ENV")
+                    }
+
+
+                    let env = self.allocate_env(parent, size);
+
+                    self.push_env(env);
+                },
+
+                START_SCOPE_ENV(size) => {
+                    let mut parent = None;
+
+                    if !self.stack_env_empty() {
+                        parent = Some(self.top_env().clone());
+                    }
+
+
+                    let env = self.allocate_env(parent, size);
+
+                    self.push_env(env);
+                },
+
+                CAPTURE(old_position, new_index) => {
+                    let fp = self.fp as isize;
+                    let env = self.top_env().get_ref();
+
+                    let captured_var = env.get(1, new_index);
+                    let mut var = captured_var.borrow_mut();
+
+                    // TODO: handle negative
+                    *var = CapturedVar::Unclosed((fp + old_position) as usize);
+                }
+
+                CLOSE_ENV => {
+                    self.close_env();
+                },
+
+                CLOSE_ALL_ENV => {
+                    while self.efp < self.env_stack.len() {
+                        self.close_env();
+                    }
+                }
+
+                LOAD_CLOSURE(level, new_index) => {
+                    let captured_var;
+                    if let Func(func) = self.get_current_function() {
+                        captured_var = func.get_env_var(level, new_index).expect("Invalid LOAD_CLOSURE outside of closure");
+                    } else {
+                        panic!("Invalid function type for LOAD_CLOSURE")
+                    }
+
+                    let var = captured_var.borrow();
+
+                    match *var {
+                        CapturedVar::Closed(ref value) => {
+                            self.push(value.clone());
+                        },
+                        CapturedVar::Unclosed(position) => {
+                            self.load(0, position as isize);
+                        },
+                        CapturedVar::Empty => panic!("Invalid access of uncaptured values"),
+                    }
+                },
+
+                STORE_CLOSURE(level, new_index) => {
+                    let captured_var;
+                    if let Func(func) = self.get_current_function() {
+                        captured_var = func.get_env_var(level, new_index).expect("Invalid STORE_CLOSURE outside of closure");
+                    } else {
+                        panic!("Invalid function type for STORE_CLOSURE")
+                    }
+
+                    let mut var = captured_var.borrow_mut();
+
+                    match *var {
+                        CapturedVar::Closed(_) => {
+                            let value = self.pop();
+                            *var = CapturedVar::Closed(value);
+                        },
+                        CapturedVar::Unclosed(position) => {
+                            self.store(0, position as isize);
+                        },
+                        CapturedVar::Empty => panic!("Invalid access of uncaptured values"),
+                    }
+                },
 
                 PRINT(count) => {
                     let start = self.stack.len() - count;
@@ -450,11 +554,7 @@ impl<'io> VM<'io> {
     }
 
     fn pop(&mut self) -> Value {
-        if let Some(val) = self.stack.pop() {
-            val
-        } else {
-            panic!("Stack underflow");
-        }
+        self.stack.pop().expect("Stack underflow")
     }
 
     fn push_int(&mut self, i: i64) {
@@ -471,11 +571,12 @@ impl<'io> VM<'io> {
 
     fn peek(&mut self, offset: usize) -> &mut Value {
         let last = self.stack.len() - offset - 1;
-        if let Some(val) = self.stack.get_mut(last) {
-            val
-        } else {
-            panic!("Stack underflow");
-        }
+        self.stack.get_mut(last).expect("Stack underflow")
+    }
+
+    fn get_current_function(&self) -> Value {
+        let fp = self.fp;
+        self.load_value(fp, -STACK_FRAME_SIZE)
     }
 
     fn store(&mut self, start: usize, offset: isize) {
@@ -487,10 +588,13 @@ impl<'io> VM<'io> {
     }
 
     fn load (&mut self, start : usize, offset: isize) {
-        let pos = (start as isize) + offset;
-        let value = self.stack.get(pos as usize)
-            .expect("Invalid stack access").clone();
+        let value = self.load_value(start, offset);
         self.stack.push(value);
+    }
+
+    fn load_value(&self, start: usize, offset: isize) -> Value {
+        let pos = (start as isize) + offset;
+        self.stack.get(pos as usize).expect("Invalid stack access").clone()
     }
 
     fn get_constant(&self, idx : usize) -> Value {
@@ -498,6 +602,49 @@ impl<'io> VM<'io> {
             val.clone()
         } else {
             panic!("Unknown constant");
+        }
+    }
+
+    // environment stack
+    fn push_env(&mut self, env: HeapPtr<Environment>) {
+        self.env_stack.push(env);
+    }
+
+    fn pop_env(&mut self) -> HeapPtr<Environment> {
+        let len = self.env_stack.len();
+
+        if self.efp < len {
+            return self.env_stack.pop().unwrap();
+        }
+
+        panic!("Env stack underflow");
+    }
+
+    fn stack_env_empty(&self) -> bool {
+        self.env_stack.len() == 0
+    }
+
+    fn top_env(&self) -> &HeapPtr<Environment> {
+        // TODO: use efp
+        let last = self.env_stack.len() - 1;
+        self.env_stack.get(last).expect("Env stack underflow")
+    }
+
+    fn close_env(&mut self) {
+        let rf = self.pop_env();
+        let env = rf.get_ref();
+
+        for captured_var in env.values() {
+            let mut var = captured_var.borrow_mut();
+
+            match *var {
+                CapturedVar::Unclosed(position) => {
+                    let value = self.load_value(0, position as isize);
+                    *var = CapturedVar::Closed(value);
+                },
+                CapturedVar::Closed(_) => panic!("Invalid closing of closed values"),
+                CapturedVar::Empty => panic!("Invalid closing of uncaptured values"),
+            }
         }
     }
 
@@ -526,6 +673,10 @@ impl<'io> VM<'io> {
         Value::List(self.allocate(list))
     }
 
+    fn allocate_env(&mut self, parent: Option<HeapPtr<Environment>>, size: usize) -> HeapPtr<Environment> {
+        self.allocate(Environment::new(parent, size))
+    }
+
     fn gc(&mut self) {
         self.trace();
         self.heap.sweep();
@@ -540,6 +691,8 @@ impl<'io> VM<'io> {
                 obj.trace();
             }
         }
+
+        // TODO: trace env_stack
     }
 
     fn cleanup(&mut self) {

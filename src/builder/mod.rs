@@ -212,7 +212,7 @@ impl StmtVisitor<StmtResult> for Builder {
         }
 
         if num_captured > 0 {
-            self.emit(line, Bytecode::START_ENV(num_captured));
+            self.emit(line, Bytecode::START_SCOPE_ENV(num_captured));
         }
 
         for bytecode in capture_args_codes {

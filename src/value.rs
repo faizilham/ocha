@@ -1,9 +1,11 @@
 use std::rc::Rc;
 use std::cell::Cell;
 use std::cell::RefCell;
+use std::slice::Iter;
 
-use program_data::FunctionSignature;
 use heap::{HeapPtr, Traceable};
+use helper::{PRefCell, new_prefcell};
+use program_data::FunctionSignature;
 
 /*** Value Declaration ***/
 
@@ -217,36 +219,131 @@ impl Traceable for VecList {
 }
 
 /*** OchaFunc Declaration ***/
-#[derive(Debug, Clone)]
-pub struct OchaFunc {
-    pub signature: FunctionSignature,
-    // TODO: implement Traceable
-    // traced: Cell<bool>,
 
-    // TODO: Pointer to closure memory here
+#[derive(Debug, Clone)]
+pub enum CapturedVar {
+    Empty,
+    Unclosed(usize),
+    Closed(Value)
 }
 
-impl OchaFunc {
-    pub fn new(signature: FunctionSignature) -> OchaFunc {
-        OchaFunc { signature }
+#[derive(Debug, Clone)]
+pub struct Environment {
+    traced: Cell<bool>,
+    parent: Option<HeapPtr<Environment>>,
+    upvalues: Vec<PRefCell<CapturedVar>>,
+}
+
+impl Environment {
+    pub fn new(parent: Option<HeapPtr<Environment>>, size: usize) -> Self {
+        let mut upvalues = Vec::with_capacity(size);
+
+        for _ in 0..size {
+            upvalues.push(new_prefcell(CapturedVar::Empty));
+        }
+
+        Self { traced: Cell::new(false), parent, upvalues}
+    }
+
+    pub fn get(&self, level: usize, new_index: usize) -> PRefCell<CapturedVar> {
+        if level == 1 {
+            return self.upvalues.get(new_index).expect("Invalid upvalue index").clone();
+        } else if level > 1 {
+            if let Some(parent) = &self.parent {
+                return parent.get_ref().get(level - 1, new_index);
+            }
+
+            panic!("Accessing empty parent environment");
+        }
+
+        panic!("Accessing invalid environment level");
+    }
+
+    pub fn values(&self) -> Iter<PRefCell<CapturedVar>> {
+        self.upvalues.iter()
     }
 }
 
-// impl Traceable for OchaFunc {
-//     fn trace(&self) {
-//         if self.is_traced() {
-//             return;
-//         }
+impl Traceable for Environment {
+    fn trace(&self) {
+        if self.is_traced() {
+            return;
+        }
 
-//         self.traced.set(true);
-//         // TODO: trace closure
-//     }
+        self.traced.set(true);
 
-//     fn reset_trace(&self) {
-//         self.traced.set(false);
-//     }
+        // trace upvalues and parent
+        for upvalue in self.upvalues.iter() {
+            if let CapturedVar::Closed(value) = &*upvalue.borrow() {
+                if let Some(traceable) = get_traceable(value) {
+                    traceable.trace();
+                }
+            }
+        }
 
-//     fn is_traced(&self) -> bool {
-//         self.traced.get()
-//     }
-// }
+        if let Some(parent) = &self.parent {
+            parent.get_ref().trace();
+        }
+    }
+
+    fn reset_trace(&self) {
+        self.traced.set(false);
+    }
+
+    fn is_traced(&self) -> bool {
+        self.traced.get()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OchaFunc {
+    traced: Cell<bool>,
+
+    pub signature: FunctionSignature,
+    env: Option<HeapPtr<Environment>>,
+}
+
+impl OchaFunc {
+    pub fn new(signature: FunctionSignature, env: Option<HeapPtr<Environment>>) -> OchaFunc {
+        OchaFunc { traced: Cell::new(false), signature, env }
+    }
+
+    pub fn get_env_var(&self, level: usize, new_index: usize) -> Option<PRefCell<CapturedVar>> {
+        if let Some(env) = &self.env {
+            Some(env.get_ref().get(level, new_index))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_env(&self) -> Option<HeapPtr<Environment>> {
+        if let Some(env) = &self.env {
+            Some(env.clone())
+        } else {
+            None
+        }
+    }
+}
+
+impl Traceable for OchaFunc {
+    fn trace(&self) {
+        if self.is_traced() {
+            return;
+        }
+
+        self.traced.set(true);
+
+        // trace environment
+        if let Some(env) = &self.env {
+            env.get_ref().trace();
+        }
+    }
+
+    fn reset_trace(&self) {
+        self.traced.set(false);
+    }
+
+    fn is_traced(&self) -> bool {
+        self.traced.get()
+    }
+}
