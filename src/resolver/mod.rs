@@ -114,8 +114,8 @@ struct Resolver {
 }
 
 
-type StmtResult = Result<(bool), Exception>; // returned
-type ExprResult = Result<(bool), Exception>; // has_closure
+type StmtResult = Result<(bool, bool), Exception>; // returned, is_capturing
+type ExprResult = Result<(bool), Exception>; // is_capturing
 
 impl Resolver {
     pub fn new() -> Resolver {
@@ -290,12 +290,16 @@ impl StmtVisitor<StmtResult> for Resolver {
         let symbol_type = symbol.get();
 
         if let SymbolType::Var{..} = symbol_type {
-            self.resolve_expr(expr)?;
+            let mut is_capturing = self.resolve_expr(expr)?;
 
             let var_id = self.add_resolve(resolve_type, symbol_type);
             id.set(var_id);
 
-            return Ok(false);
+            if let Closure(..) = resolve_type {
+                is_capturing = true;
+            }
+
+            return Ok((false, is_capturing));
         }
 
         error(name.line, "Can't assign value to function")
@@ -311,10 +315,14 @@ impl StmtVisitor<StmtResult> for Resolver {
         let new_symtable = SymbolTable::create_local_scope(&self.symbol_table, scope_id);
         self.symbol_table = new_symtable;
 
-        let mut block_returned = false;
+        let mut is_returned = false;
+        let mut is_capturing = false;
 
         for stmt in body {
-            block_returned = self.resolve(stmt)?;
+            let (block_returned, block_capturing) = self.resolve(stmt)?;
+
+            is_returned = block_returned || is_returned;
+            is_capturing = block_capturing || is_capturing;
 
             if block_returned {
                 break;
@@ -331,16 +339,16 @@ impl StmtVisitor<StmtResult> for Resolver {
 
         self.symbol_table = current_symtable;
 
-        Ok(block_returned)
+        Ok((is_returned, is_capturing))
     }
 
     fn visit_break(&mut self) -> StmtResult {
-        Ok(false)
+        Ok((false, false))
     }
 
     fn visit_expression(&mut self, expr: &Box<Expr>) -> StmtResult {
-        self.resolve_expr(expr)?;
-        Ok(false)
+        let is_capturing = self.resolve_expr(expr)?;
+        Ok((false, is_capturing))
     }
 
     fn visit_funcdecl(&mut self, name: &Token, args: &Vec<Token>, body: &Vec<Box<Stmt>>, id: &Cell<usize>) -> StmtResult {
@@ -357,68 +365,86 @@ impl StmtVisitor<StmtResult> for Resolver {
         // push new symbol table and put args inside it
         self.add_args(args)?;
 
+        let mut is_capturing = false;
+
         for stmt in body {
-            let block_returned = self.resolve(stmt)?;
+            let (block_returned, block_capturing) = self.resolve(stmt)?;
+
+            is_capturing = block_capturing || is_capturing;
 
             if block_returned {
                 break;
             }
         }
 
+        if is_capturing {
+            let function_data = self.functions.get_mut(func_id).unwrap();
+            function_data.signature.is_closure = true;
+        }
+
         // end function
         self.symbol_table = current_symtable;
 
-        Ok(false)
+        Ok((false, false))
     }
 
     fn visit_if(&mut self, condition: &Box<Expr>, true_branch: &Box<Stmt>, false_branch: &Option<Box<Stmt>>) -> StmtResult {
-        self.resolve_expr(condition)?;
-        let true_returned = self.resolve(true_branch)?;
+        let mut is_capturing = self.resolve_expr(condition)?;
+        let mut is_returned;
 
-        let mut false_returned = false;
+        let (true_returned, true_capturing) = self.resolve(true_branch)?;
+        is_returned = true_returned;
+        is_capturing = true_capturing || is_capturing;
 
         if let Some(false_branch) = false_branch {
-            false_returned = self.resolve(false_branch)?;
+            let (false_returned, false_capturing) = self.resolve(false_branch)?;
+            is_returned = false_returned || is_capturing;
+            is_capturing = false_capturing || is_capturing;
         }
 
-        Ok(true_returned && false_returned)
+        Ok((is_returned, is_capturing))
     }
 
     fn visit_print(&mut self, exprs: &Vec<Box<Expr>>) -> StmtResult {
+        let mut is_capturing = false;
+
         for expr in exprs {
-            self.resolve_expr(expr)?;
+            is_capturing = self.resolve_expr(expr)? || is_capturing;
         }
 
-        Ok(false)
+        Ok((false, is_capturing))
     }
 
     fn visit_return(&mut self, expr: &Option<Box<Expr>>) -> StmtResult {
+        let mut is_capturing = false;
         if let Some(expr) = expr {
-            self.resolve_expr(expr)?;
+            is_capturing = self.resolve_expr(expr)? || is_capturing;
         }
 
-        Ok(true)
+        Ok((true, is_capturing))
     }
 
     fn visit_set(&mut self, get_expr: &Box<Expr>, expr: &Box<Expr>) -> StmtResult {
-        self.resolve_expr(get_expr)?;
-        self.resolve_expr(expr)?;
+        let mut is_capturing = self.resolve_expr(get_expr)?;
+        is_capturing = self.resolve_expr(expr)? || is_capturing;
 
-        Ok(false)
+        Ok((false, is_capturing))
     }
 
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
         let var_id = self.add_var(name)?;
         id.set(var_id);
 
-        self.resolve_expr(expr)?;
+        let is_capturing = self.resolve_expr(expr)?;
 
-        Ok(false)
+        Ok((false, is_capturing))
     }
 
     fn visit_while(&mut self, condition: &Box<Expr>, body: &Box<Stmt>) -> StmtResult {
-        self.resolve_expr(condition)?;
-        self.resolve(body)
+        let cond_capturing = self.resolve_expr(condition)?;
+        let (returned, body_capturing) = self.resolve(body)?;
+
+        Ok((returned, cond_capturing || body_capturing))
     }
 }
 
