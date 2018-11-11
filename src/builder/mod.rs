@@ -167,7 +167,6 @@ impl StmtVisitor<StmtResult> for Builder {
         if let SymbolType::Var{ offset, capture_offset, ..} = symbol_type {
             self.generate_expr(expr)?;
 
-            // TODO: handle closure
             let bytecode = match resolve_type {
                 ResolveType::Global         => Bytecode::STORE_GLOBAL(offset),
                 ResolveType::Local          => Bytecode::STORE(offset),
@@ -235,8 +234,6 @@ impl StmtVisitor<StmtResult> for Builder {
             }
         }
 
-        // TODO: handle restore on exception
-
         Ok(block_returned)
     }
 
@@ -298,7 +295,7 @@ impl StmtVisitor<StmtResult> for Builder {
             self.emit(name.line, bytecode);
         }
 
-        // generate bidy
+        // generate body
         let current_num_captured = self.num_captured_vars;
         self.num_captured_vars = num_captured;
 
@@ -314,11 +311,8 @@ impl StmtVisitor<StmtResult> for Builder {
 
         self.num_captured_vars = current_num_captured;
 
-
         if !block_returned {
             // add empty return if not yet exist
-            // TODO: handle has_captured
-
             let line = self.last_line;
             self.emit(line, Bytecode::NIL);
 
@@ -330,8 +324,6 @@ impl StmtVisitor<StmtResult> for Builder {
         }
 
         // NOTE: no need to pop local var here, as it already handle by RET
-
-        // TODO: handle restore on exception
 
         // end function block
         self.current_subprog = subprog;
@@ -421,7 +413,6 @@ impl StmtVisitor<StmtResult> for Builder {
     }
 
     fn visit_vardecl(&mut self, name: &Token, expr: &Box<Expr>, id: &Cell<usize>) -> StmtResult {
-        // TODO: handle is_captured
         self.generate_expr(expr)?;
 
         let var_data = *self.variables.get(id.get()).expect("Invalid variable id in builder");
@@ -608,8 +599,6 @@ impl ExprVisitor<ExprResult> for Builder {
 
     fn visit_variable(&mut self, name: &Token, id: &Cell<usize>) -> ExprResult {
         let ResolverData{symbol_type, resolve_type} = *self.resolves.get(id.get()).expect("Invalid resolve id in builder");
-
-        // TODO: handle closure
 
         let bytecode = match symbol_type {
             SymbolType::Var{offset, capture_offset, ..} =>

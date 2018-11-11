@@ -16,8 +16,7 @@ pub enum Value {
     Int(i64),
     Float(f64),
     Bool(bool),
-
-    Func(OchaFunc), // TODO: move to heap objects
+    Func(OchaFunc),
 
     // heap objects
     Str(HeapPtr<OchaStr>),
@@ -30,6 +29,13 @@ pub fn get_traceable(value: &Value) -> Option<Rc<Traceable>> {
     match value {
         Str(s) => Some(s.get_ref()),
         List(l) => Some(l.get_ref()),
+        Func(f) => {
+            if let Some(env) = &f.env {
+                Some(env.get_ref())
+            } else {
+                None
+            }
+        }
         _ => None
     }
 }
@@ -297,15 +303,13 @@ impl Traceable for Environment {
 
 #[derive(Debug, Clone)]
 pub struct OchaFunc {
-    traced: Cell<bool>,
-
     pub signature: FunctionSignature,
     env: Option<HeapPtr<Environment>>,
 }
 
 impl OchaFunc {
     pub fn new(signature: FunctionSignature, env: Option<HeapPtr<Environment>>) -> OchaFunc {
-        OchaFunc { traced: Cell::new(false), signature, env }
+        OchaFunc { signature, env }
     }
 
     pub fn get_env_var(&self, level: usize, new_index: usize) -> Option<PRefCell<CapturedVar>> {
@@ -322,28 +326,5 @@ impl OchaFunc {
         } else {
             None
         }
-    }
-}
-
-impl Traceable for OchaFunc {
-    fn trace(&self) {
-        if self.is_traced() {
-            return;
-        }
-
-        self.traced.set(true);
-
-        // trace environment
-        if let Some(env) = &self.env {
-            env.get_ref().trace();
-        }
-    }
-
-    fn reset_trace(&self) {
-        self.traced.set(false);
-    }
-
-    fn is_traced(&self) -> bool {
-        self.traced.get()
     }
 }

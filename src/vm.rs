@@ -475,9 +475,12 @@ impl<'io> VM<'io> {
                     let captured_var = env.get(1, new_index);
                     let mut var = captured_var.borrow_mut();
 
+                    let abs_position = fp + old_position;
+                    if abs_position < 0 {
+                        panic!("Invalid capture position");
+                    }
 
-                    // TODO: handle negative
-                    *var = CapturedVar::Unclosed((fp + old_position) as usize);
+                    *var = CapturedVar::Unclosed(abs_position as usize);
                 }
 
                 CLOSE_ENV => {
@@ -626,7 +629,6 @@ impl<'io> VM<'io> {
     }
 
     fn top_env(&self) -> &HeapPtr<Environment> {
-        // TODO: use efp
         let last = self.env_stack.len() - 1;
         self.env_stack.get(last).expect("Env stack underflow")
     }
@@ -693,7 +695,10 @@ impl<'io> VM<'io> {
             }
         }
 
-        // TODO: trace env_stack
+        // trace env_stack
+        for env in self.env_stack.iter() {
+            env.get_ref().trace();
+        }
     }
 
     fn cleanup(&mut self) {
