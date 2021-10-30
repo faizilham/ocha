@@ -37,7 +37,7 @@ impl<T : Traceable> Clone for HeapPtr<T> {
 }
 
 pub struct Heap {
-    objs: Vec<Rc<Traceable>>
+    objs: Vec<Rc<dyn Traceable>>
 }
 
 impl Heap {

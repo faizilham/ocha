@@ -25,14 +25,14 @@ pub fn run_file(filename : String) -> Result<(), ()> {
     run_file_with_io(filename, &mut io)
 }
 
-fn run_file_with_io(filename : String, io: &mut OchaIO) -> Result<(), ()> {
+fn run_file_with_io(filename : String, io: &mut dyn OchaIO) -> Result<(), ()> {
     let source = read_file_with_io(&filename, io)?;
     let module = parse_and_build(source).map_err(|e| report_exceptions(io, e))?;
 
     execute(module, io).map_err(|e| report_exception(io, e))
 }
 
-fn read_file_with_io (filename : &str, io: &mut OchaIO) -> Result<String, ()> {
+fn read_file_with_io (filename : &str, io: &mut dyn OchaIO) -> Result<String, ()> {
     // open file
     let file = File::open(filename);
 
@@ -58,18 +58,18 @@ fn parse_and_build(source : String) -> Result<Module, Vec<Exception>> {
     builder::build(statements, resolver_info)
 }
 
-fn execute(module: Module, io: &mut OchaIO) -> Result<(), Exception> {
+fn execute(module: Module, io: &mut dyn OchaIO) -> Result<(), Exception> {
     let mut vm = VM::new(module, io);
     vm.run()
 }
 
 // Exception handlers
-fn report_exception(io: &mut OchaIO, exception: Exception) -> () {
+fn report_exception(io: &mut dyn OchaIO, exception: Exception) -> () {
     io.error(&exception.to_string());
     ()
 }
 
-fn report_exceptions(io: &mut OchaIO, exceptions: Vec<Exception>) -> () {
+fn report_exceptions(io: &mut dyn OchaIO, exceptions: Vec<Exception>) -> () {
     for e in exceptions {
         report_exception(io, e);
     }

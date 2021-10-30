@@ -117,7 +117,7 @@ struct Resolver {
 
 
 type StmtResult = Result<(bool, bool), Exception>; // returned, is_capturing
-type ExprResult = Result<(bool), Exception>; // is_capturing
+type ExprResult = Result<bool, Exception>; // is_capturing
 
 impl Resolver {
     pub fn new() -> Resolver {

@@ -25,7 +25,7 @@ pub enum Value {
 
 use self::Value::*;
 
-pub fn get_traceable(value: &Value) -> Option<Rc<Traceable>> {
+pub fn get_traceable(value: &Value) -> Option<Rc<dyn Traceable>> {
     match value {
         Str(s) => Some(s.get_ref()),
         List(l) => Some(l.get_ref()),

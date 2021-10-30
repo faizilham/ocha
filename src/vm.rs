@@ -95,13 +95,13 @@ pub struct VM<'io> {
     line_data: LineData,
     max_objects: usize,
 
-    io: &'io mut OchaIO
+    io: &'io mut dyn OchaIO
 }
 
 const INITIAL_GC_THRESHOLD : usize = 50;
 
 impl<'io> VM<'io> {
-    pub fn new (module: Module, io: &'io mut OchaIO) -> VM {
+    pub fn new (module: Module, io: &'io mut dyn OchaIO) -> VM {
         let Module { codes, mut literals, line_data, functions } = module;
 
         let stack = Vec::with_capacity(256);
