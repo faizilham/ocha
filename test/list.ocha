@@ -3,3 +3,10 @@ let c = [1, 2, 3];
 c[0] = c[0] + c[1] + c[2];
 
 print(c[0]);                        // 6
+
+fn test() {
+  return 2;
+}
+
+c[1] = test;
+print(c[1]()+c[2]);                 // 5
